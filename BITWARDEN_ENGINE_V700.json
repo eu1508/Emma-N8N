@@ -1,0 +1,54 @@
+{
+    "name": "BITWARDEN_ENGINE_V700",
+    "nodes": [
+        {
+            "parameters": {
+                "workflowInputs": {
+                    "values": [
+                        {
+                            "name": "text",
+                            "type": "string"
+                        }
+                    ]
+                }
+            },
+            "id": "trigger",
+            "name": "Execute Input",
+            "type": "n8n-nodes-base.executeWorkflowTrigger",
+            "typeVersion": 1,
+            "position": [
+                240,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "notice": "Sicherheits-Engine für Passwörter und Secrets."
+            },
+            "id": "info",
+            "name": "Security Vault",
+            "type": "n8n-nodes-base.noOp",
+            "typeVersion": 1,
+            "position": [
+                460,
+                300
+            ]
+        }
+    ],
+    "connections": {
+        "trigger": {
+            "main": [
+                [
+                    {
+                        "node": "info",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1"
+    }
+}

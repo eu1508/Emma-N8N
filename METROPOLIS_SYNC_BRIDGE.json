@@ -1,0 +1,57 @@
+{
+    "name": "METROPOLIS_V14_SYNC_BRIDGE",
+    "nodes": [
+        {
+            "parameters": {
+                "path": "metropolis-sync",
+                "method": "POST",
+                "options": {}
+            },
+            "id": "webhook-sync",
+            "name": "Local Sync Trigger",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                200,
+                400
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "=INSERT INTO global_registry (key, value, context) VALUES ('METROPOLIS_STATUS', 'ACTIVE', 'Sync via Bridge');",
+                "options": {}
+            },
+            "id": "update-registry",
+            "name": "Update Registry",
+            "type": "n8n-nodes-base.sqlite",
+            "typeVersion": 1,
+            "position": [
+                450,
+                400
+            ],
+            "credentials": {
+                "sqlite": {
+                    "id": "local_sqlite_metropolis",
+                    "name": "Metropolis SQLite"
+                }
+            }
+        }
+    ],
+    "connections": {
+        "Local Sync Trigger": {
+            "main": [
+                [
+                    {
+                        "node": "update-registry",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1"
+    }
+}

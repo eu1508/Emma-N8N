@@ -1,0 +1,88 @@
+{
+    "name": "GITHUB_ENGINE_V700",
+    "nodes": [
+        {
+            "parameters": {
+                "workflowInputs": {
+                    "values": [
+                        {
+                            "name": "text",
+                            "type": "string"
+                        }
+                    ]
+                }
+            },
+            "id": "git-input",
+            "name": "Dev Input",
+            "type": "n8n-nodes-base.executeWorkflowTrigger",
+            "typeVersion": 1,
+            "position": [
+                240,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "modelName": "models/gemini-1.5-pro",
+                "options": {
+                    "temperature": 0.2
+                }
+            },
+            "id": "gemini-git",
+            "name": "Git Intelligence",
+            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+            "typeVersion": 1,
+            "position": [
+                460,
+                450
+            ],
+            "credentials": {
+                "googlePalmApi": {
+                    "id": "U6jVg3cxRNRwbqPQ",
+                    "name": "Google Gemini API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "=Du bist EMMA's Software-Architektin.\n\nAnalysiere die Dev-Anfrage:\n{{ $json.text }}\n\nFormuliere GitHub-Aktionen (Issues, Repo-Management, Commits).\n\nAntworte als JSON:\n{\n  \"action\": \"CREATE_ISSUE|REPO_AUDIT|CODE_REVIEW\",\n  \"repo\": \"DefaultRepo\",\n  \"details\": \"Was ist zu tun?\"\n}"
+            },
+            "id": "git-logic",
+            "name": "Git Logic",
+            "type": "@n8n/n8n-nodes-langchain.chainLlm",
+            "typeVersion": 1.4,
+            "position": [
+                460,
+                300
+            ]
+        }
+    ],
+    "connections": {
+        "Dev Input": {
+            "main": [
+                [
+                    {
+                        "node": "Git Logic",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "gemini-git": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "Git Logic",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1"
+    }
+}

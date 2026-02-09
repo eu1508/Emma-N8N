@@ -1,0 +1,88 @@
+{
+    "name": "SHOPIFY_ENGINE_V700",
+    "nodes": [
+        {
+            "parameters": {
+                "workflowInputs": {
+                    "values": [
+                        {
+                            "name": "text",
+                            "type": "string"
+                        }
+                    ]
+                }
+            },
+            "id": "shop-input",
+            "name": "Shopify Request",
+            "type": "n8n-nodes-base.executeWorkflowTrigger",
+            "typeVersion": 1,
+            "position": [
+                240,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "modelName": "models/gemini-1.5-pro",
+                "options": {
+                    "temperature": 0.4
+                }
+            },
+            "id": "gemini-shop",
+            "name": "Shopify Intelligence",
+            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+            "typeVersion": 1,
+            "position": [
+                460,
+                450
+            ],
+            "credentials": {
+                "googlePalmApi": {
+                    "id": "U6jVg3cxRNRwbqPQ",
+                    "name": "Google Gemini API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "=Du bist EMMA's Shopify-Managerin.\n\nAnalysiere die Anfrage:\n{{ $json.text }}\n\nFormuliere die notwendigen Shopify-Aktionen (Produkte, Bestellungen, Inventory).\n\nAntworte als JSON:\n{\n  \"action\": \"CREATE_PROD|UPDATE_STOCK|GET_ORDERS\",\n  \"parameters\": {},\n  \"strategic_goal\": \"Umsatzmaximierung\"\n}"
+            },
+            "id": "shop-logic",
+            "name": "Shopify Logic",
+            "type": "@n8n/n8n-nodes-langchain.chainLlm",
+            "typeVersion": 1.4,
+            "position": [
+                460,
+                300
+            ]
+        }
+    ],
+    "connections": {
+        "Shopify Request": {
+            "main": [
+                [
+                    {
+                        "node": "Shopify Logic",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "gemini-shop": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "Shopify Logic",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1"
+    }
+}

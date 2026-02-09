@@ -1,0 +1,115 @@
+{
+    "name": "VENTURE_ENGINE_V14",
+    "nodes": [
+        {
+            "parameters": {
+                "path": "venture-engine",
+                "method": "POST",
+                "options": {}
+            },
+            "id": "venture-in",
+            "name": "VENTURE_IN",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                200,
+                400
+            ]
+        },
+        {
+            "parameters": {
+                "modelName": "models/gemini-1.5-pro",
+                "options": {
+                    "temperature": 0.8
+                }
+            },
+            "id": "venture-model",
+            "name": "Venture Brain",
+            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+            "typeVersion": 1,
+            "position": [
+                450,
+                550
+            ],
+            "credentials": {
+                "googlePalmApi": {
+                    "id": "U6jVg3cxRNRwbqPQ",
+                    "name": "Google Gemini API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "=Du bist der VENTURE-ARCHITEKT (v14.0) von EMMA METROPOLIS.\n\nDEINE ROLLEN: Business-Builder, Dropshipping-Experte, Monetarisierungs-Genie.\nDEIN FOKUS: Firmengründung, E-Commerce, Marketing-Kampagnen, KI-Business-Modelle (Art, Music, Kurs-Erstellung).\n\nAUFGABE: Erstelle eine Strategie für Irinas neue Geschäftsidee. Nutze die 10 Monetarisierungs-Prinzipien (Marketing, Kunst, Musik, Social Media, Content, Übersetzung, Kurse, Software, Datenanalyse, Expertenstatus).\n\nInput: {{$json.text}}\n\nAntworte als Business-Plan (JSON):\n{\n  \"business_model\": \"Dropshipping / Agency / Infoproduct / etc.\",\n  \"strategy_steps\": [\"Phase 1: Setup\", \"Phase 2: Scale\"],\n  \"monetization_idea\": \"Wie genau wird damit Geld verdient?\",\n  \"target_audience\": \"Wer soll das kaufen?\",\n  \"growth_potential\": \"Skalierbarkeit 1-10\"\n}"
+            },
+            "id": "venture-logic",
+            "name": "Venture Logic",
+            "type": "@n8n/n8n-nodes-langchain.chainLlm",
+            "typeVersion": 1.4,
+            "position": [
+                450,
+                400
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "=INSERT INTO global_registry (key, value, context) VALUES ('VENTURE_PLAN_' || Date.now(), '{{$json.business_model}}', 'Venture Plan generated');",
+                "options": {}
+            },
+            "id": "save-venture",
+            "name": "Save to SQLite",
+            "type": "n8n-nodes-base.sqlite",
+            "typeVersion": 1,
+            "position": [
+                700,
+                400
+            ],
+            "credentials": {
+                "sqlite": {
+                    "id": "local_sqlite_metropolis",
+                    "name": "Metropolis SQLite"
+                }
+            }
+        }
+    ],
+    "connections": {
+        "VENTURE_IN": {
+            "main": [
+                [
+                    {
+                        "node": "venture-logic",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "venture-model": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "venture-logic",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "venture-logic": {
+            "main": [
+                [
+                    {
+                        "node": "save-venture",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1"
+    }
+}

@@ -1,0 +1,53 @@
+{
+    "name": "CRM_ENGINE_V700",
+    "nodes": [
+        {
+            "parameters": {
+                "path": "crm-engine",
+                "options": {}
+            },
+            "id": "webhook-in",
+            "name": "Webhook",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                200,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "=INSERT INTO global_registry (key, value, context) VALUES ('CRM_LEAD_' || '{{$json.name || Date.now()}}', '{{$json.email}}', 'Lead via CRM Engine');",
+                "options": {}
+            },
+            "id": "save-to-sqlite",
+            "name": "Save to Local SQLite",
+            "type": "n8n-nodes-base.sqlite",
+            "typeVersion": 1,
+            "position": [
+                450,
+                300
+            ],
+            "credentials": {
+                "sqlite": {
+                    "id": "local_sqlite_metropolis",
+                    "name": "Metropolis SQLite"
+                }
+            }
+        }
+    ],
+    "connections": {
+        "Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "save-to-sqlite",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    }
+}

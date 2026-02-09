@@ -1,0 +1,88 @@
+{
+    "name": "WORDPRESS_ENGINE_V700",
+    "nodes": [
+        {
+            "parameters": {
+                "workflowInputs": {
+                    "values": [
+                        {
+                            "name": "text",
+                            "type": "string"
+                        }
+                    ]
+                }
+            },
+            "id": "wp-input",
+            "name": "WordPress Command",
+            "type": "n8n-nodes-base.executeWorkflowTrigger",
+            "typeVersion": 1,
+            "position": [
+                240,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "modelName": "models/gemini-1.5-pro",
+                "options": {
+                    "temperature": 0.3
+                }
+            },
+            "id": "gemini-wp",
+            "name": "WP Intelligence",
+            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+            "typeVersion": 1,
+            "position": [
+                460,
+                450
+            ],
+            "credentials": {
+                "googlePalmApi": {
+                    "id": "U6jVg3cxRNRwbqPQ",
+                    "name": "Google Gemini API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "=Du bist EMMA's Content-Managerin für WordPress.\n\nErstelle einen Post-Entwurf oder bearbeite Seiten basierend auf:\n{{ $json.text }}\n\nAntworte als JSON:\n{\n  \"action\": \"CREATE_POST|EDIT_PAGE|MANAGE_MEDIA\",\n  \"content_draft\": \"...\",\n  \"metadata\": { \"status\": \"draft\" }\n}"
+            },
+            "id": "wp-logic",
+            "name": "WordPress Logic",
+            "type": "@n8n/n8n-nodes-langchain.chainLlm",
+            "typeVersion": 1.4,
+            "position": [
+                460,
+                300
+            ]
+        }
+    ],
+    "connections": {
+        "WordPress Command": {
+            "main": [
+                [
+                    {
+                        "node": "WordPress Logic",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "gemini-wp": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "WordPress Logic",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1"
+    }
+}

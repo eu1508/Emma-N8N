@@ -1,0 +1,54 @@
+{
+    "name": "METROPOLIS_KPI_REGISTRY",
+    "nodes": [
+        {
+            "parameters": {
+                "path": "metropolis-kpi",
+                "method": "POST",
+                "options": {}
+            },
+            "id": "kpi-in",
+            "name": "KPI_IN",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                200,
+                400
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "=INSERT INTO kpi_metrics (metric_name, value, unit) VALUES ('{{$json.metric}}', '{{$json.value}}', '{{$json.unit || 'count'}}');",
+                "options": {}
+            },
+            "id": "update-kpi",
+            "name": "Update KPI SQLite",
+            "type": "n8n-nodes-base.sqlite",
+            "typeVersion": 1,
+            "position": [
+                450,
+                400
+            ],
+            "credentials": {
+                "sqlite": {
+                    "id": "local_sqlite_metropolis",
+                    "name": "Metropolis SQLite"
+                }
+            }
+        }
+    ],
+    "connections": {
+        "KPI_IN": {
+            "main": [
+                [
+                    {
+                        "node": "update-kpi",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    }
+}

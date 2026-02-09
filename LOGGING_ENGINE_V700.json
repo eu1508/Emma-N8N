@@ -1,0 +1,53 @@
+{
+    "name": "LOGGING_ENGINE_V700",
+    "nodes": [
+        {
+            "parameters": {
+                "path": "logging-engine",
+                "options": {}
+            },
+            "id": "webhook-in",
+            "name": "Webhook",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                200,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "=INSERT INTO engine_registry (engine_name, status, version) VALUES ('GENERAL_LOG', 'INFO', 'v14.0');",
+                "options": {}
+            },
+            "id": "log-to-sqlite",
+            "name": "Log to Local SQLite",
+            "type": "n8n-nodes-base.sqlite",
+            "typeVersion": 1,
+            "position": [
+                450,
+                300
+            ],
+            "credentials": {
+                "sqlite": {
+                    "id": "local_sqlite_metropolis",
+                    "name": "Metropolis SQLite"
+                }
+            }
+        }
+    ],
+    "connections": {
+        "Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "log-to-sqlite",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    }
+}

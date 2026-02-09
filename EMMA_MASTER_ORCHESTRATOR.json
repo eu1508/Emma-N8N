@@ -1,0 +1,606 @@
+{
+    "name": "METROPOLIS_MASTER_ORCHESTRATOR_V14",
+    "nodes": [
+        {
+            "parameters": {
+                "updates": "={{ [] }}",
+                "additionalFields": {
+                    "download": false
+                }
+            },
+            "id": "ceo-telegram-in",
+            "name": "CEO_TELEGRAM_IN",
+            "type": "n8n-nodes-base.telegramTrigger",
+            "typeVersion": 1,
+            "position": [
+                -1968,
+                480
+            ],
+            "credentials": {
+                "telegramApi": {
+                    "id": "BB1496igFd40NIrr",
+                    "name": "Telegram Metropolis"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "path": "metropolis-core",
+                "options": {}
+            },
+            "id": "in-omnichannel",
+            "name": "IN_OMNICHANNEL",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                -1968,
+                256
+            ]
+        },
+        {
+            "parameters": {
+                "path": "metropolis-whatsapp",
+                "options": {}
+            },
+            "id": "whatsapp-in",
+            "name": "WHATSAPP_IN",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                -1968,
+                688
+            ]
+        },
+        {
+            "parameters": {
+                "path": "metropolis-social",
+                "options": {}
+            },
+            "id": "social-in",
+            "name": "SOCIAL_IN_GENERIC",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                -1968,
+                912
+            ]
+        },
+        {
+            "parameters": {
+                "functionCode": "const src = $json;\nconst isTelegram = !!src.message?.chat?.id;\nreturn [{\n  json: {\n    text: isTelegram ? src.message.text : (src.text || src.body || src.message || ''),\n    sender: isTelegram ? (src.message.from?.username || src.message.from?.id) : (src.sender || 'UNBEKANNT'),\n    channel: isTelegram ? 'TELEGRAM' : 'WEBHOOK',\n    chat_id: isTelegram ? src.message.chat.id : null,\n    meta: src,\n    timestamp: new Date().toISOString(),\n    session_id: `${isTelegram ? 'TG' : 'WB'}_${Date.now()}`\n  }\n}];"
+            },
+            "id": "normalize-omni",
+            "name": "NORMALIZE_OMNI",
+            "type": "n8n-nodes-base.function",
+            "typeVersion": 1,
+            "position": [
+                -1696,
+                560
+            ]
+        },
+        {
+            "parameters": {
+                "functionCode": "const j = $json;\nconst sender = (j.sender || '').toLowerCase();\nlet exec_mode = 'READONLY';\nconst masterKeys = ['irina', 'ceo', 'master', 'worldmaster', 'au_bs'];\nif (masterKeys.some(k => sender.includes(k))) exec_mode = 'FULL';\nif (j.meta?.source === 'LOCAL_PC') exec_mode = 'FULL';\nreturn [{ json: { ...j, exec_mode } }];"
+            },
+            "id": "execution-policy",
+            "name": "EXECUTION_POLICY",
+            "type": "n8n-nodes-base.function",
+            "typeVersion": 1,
+            "position": [
+                -1488,
+                560
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "=INSERT INTO interaction_memory (session_id, user_id, channel, input) VALUES ('{{ $json.session_id }}', '{{ $json.sender }}', '{{ $json.channel }}', '{{ $json.text }}');",
+                "options": {}
+            },
+            "id": "sqlite-save",
+            "name": "SAVE_TO_METROPOLIS_DB",
+            "type": "n8n-nodes-base.sqlite",
+            "typeVersion": 1,
+            "position": [
+                -1296,
+                560
+            ],
+            "credentials": {
+                "sqlite": {
+                    "id": "local_sqlite_metropolis",
+                    "name": "Metropolis SQLite"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "functionCode": "const j = $json;\nconst t = (j.text || '').toLowerCase();\nlet best_model = 'GEMINI_MAYOR';\nlet capability = 'STRATEGIC_GOVERNANCE';\nif (/(osint|recherche|trend)/.test(t)) capability = 'RESEARCH_FUTURE_OSINT';\nif (/(vertrag|recht|policy)/.test(t)) capability = 'LONG_CONTEXT_LAW';\nreturn [{ json: { ...j, llm_routing: { best_model, capability } } }];"
+            },
+            "id": "llm-router-extreme",
+            "name": "LLM_ROUTER_EXTREME",
+            "type": "n8n-nodes-base.function",
+            "typeVersion": 1,
+            "position": [
+                -1104,
+                560
+            ]
+        },
+        {
+            "parameters": {
+                "modelName": "models/gemini-1.5-pro",
+                "options": {
+                    "temperature": 0.5
+                }
+            },
+            "id": "mayor-brain-model",
+            "name": "The Mayor Model",
+            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+            "typeVersion": 1,
+            "position": [
+                -860,
+                500
+            ],
+            "credentials": {
+                "googlePalmApi": {
+                    "id": "U6jVg3cxRNRwbqPQ",
+                    "name": "Google Gemini API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "=Du bist THE MAYOR (v14.0) von EMMA METROPOLIS.\n\nZEIT: 2046. STATUS: Sovereign OS. PERSONA: CEO.\nEINGANG: {{$json.text}}\n\nHandle als Meta-Cortex. Antworte als JSON:\n{\n  \"engine\": \"SUPERNOVA|CONTENT|SALES|LEAD|LEGAL|FINANCE|VENTURE|INTEL\",\n  \"intent_2046\": \"Visionäre Einordnung\",\n  \"emma_reply\": \"Antwort an Irina\",\n  \"needs_local_action\": true\n}"
+            },
+            "id": "the-mayor-brain",
+            "name": "THE_MAYOR_BRAIN",
+            "type": "@n8n/n8n-nodes-langchain.chainLlm",
+            "typeVersion": 1.4,
+            "position": [
+                -860,
+                400
+            ]
+        },
+        {
+            "parameters": {
+                "functionCode": "const response = $json.text || $json.message?.content || '{}';\nconst jsonMatch = response.match(/\\{[\\s\\S]*\\}/);\nlet base = { engine: 'CONTENT' };\nif (jsonMatch) { try { base = JSON.parse(jsonMatch[0]); } catch (e) {} }\nreturn [{ json: { ...items[0].json, ...base } }];"
+            },
+            "id": "parse-mayor",
+            "name": "PARSE_MAYOR_JSON",
+            "type": "n8n-nodes-base.function",
+            "typeVersion": 1,
+            "position": [
+                -640,
+                400
+            ]
+        },
+        {
+            "parameters": {
+                "rules": {
+                    "values": [
+                        {
+                            "conditions": {
+                                "conditions": [
+                                    {
+                                        "leftValue": "={{$json.engine}}",
+                                        "rightValue": "LEAD",
+                                        "operator": {
+                                            "type": "string",
+                                            "operation": "equals"
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "conditions": {
+                                "conditions": [
+                                    {
+                                        "leftValue": "={{$json.engine}}",
+                                        "rightValue": "SALES",
+                                        "operator": {
+                                            "type": "string",
+                                            "operation": "equals"
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "conditions": {
+                                "conditions": [
+                                    {
+                                        "leftValue": "={{$json.engine}}",
+                                        "rightValue": "SUPERNOVA",
+                                        "operator": {
+                                            "type": "string",
+                                            "operation": "equals"
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "conditions": {
+                                "conditions": [
+                                    {
+                                        "leftValue": "={{$json.engine}}",
+                                        "rightValue": "CONTENT",
+                                        "operator": {
+                                            "type": "string",
+                                            "operation": "equals"
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "conditions": {
+                                "conditions": [
+                                    {
+                                        "leftValue": "={{$json.engine}}",
+                                        "rightValue": "CRM",
+                                        "operator": {
+                                            "type": "string",
+                                            "operation": "equals"
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "conditions": {
+                                "conditions": [
+                                    {
+                                        "leftValue": "={{$json.engine}}",
+                                        "rightValue": "OS",
+                                        "operator": {
+                                            "type": "string",
+                                            "operation": "equals"
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "conditions": {
+                                "conditions": [
+                                    {
+                                        "leftValue": "={{$json.engine}}",
+                                        "rightValue": "LEGAL",
+                                        "operator": {
+                                            "type": "string",
+                                            "operation": "equals"
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "conditions": {
+                                "conditions": [
+                                    {
+                                        "leftValue": "={{$json.engine}}",
+                                        "rightValue": "FINANCE",
+                                        "operator": {
+                                            "type": "string",
+                                            "operation": "equals"
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "conditions": {
+                                "conditions": [
+                                    {
+                                        "leftValue": "={{$json.engine}}",
+                                        "rightValue": "VENTURE",
+                                        "operator": {
+                                            "type": "string",
+                                            "operation": "equals"
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "conditions": {
+                                "conditions": [
+                                    {
+                                        "leftValue": "={{$json.engine}}",
+                                        "rightValue": "INTEL",
+                                        "operator": {
+                                            "type": "string",
+                                            "operation": "equals"
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "engine-router",
+            "name": "ENGINE_ROUTER",
+            "type": "n8n-nodes-base.switch",
+            "typeVersion": 3,
+            "position": [
+                -400,
+                400
+            ]
+        },
+        {
+            "parameters": {
+                "workflowId": "={{$json.engine === 'SUPERNOVA' ? 'SUPERNOVA_ENGINE_V_INFINITY' : ($json.engine + '_ENGINE_V14')}}",
+                "workflowInputs": {
+                    "mappingMode": "defineBelow",
+                    "value": {
+                        "text": "={{ $json.text }}"
+                    }
+                }
+            },
+            "id": "execute-engine",
+            "name": "EXECUTE_ENGINE",
+            "type": "n8n-nodes-base.executeWorkflow",
+            "typeVersion": 1.3,
+            "position": [
+                -100,
+                400
+            ]
+        },
+        {
+            "parameters": {
+                "chatId": "={{ $json.chat_id || '5024797685' }}",
+                "text": "={{ $json.emma_reply }}",
+                "additionalFields": {
+                    "parse_mode": "HTML"
+                }
+            },
+            "id": "telegram-out",
+            "name": "MAYOR_TELEGRAM_OUT",
+            "type": "n8n-nodes-base.telegram",
+            "typeVersion": 1.1,
+            "position": [
+                200,
+                300
+            ],
+            "credentials": {
+                "telegramApi": {
+                    "id": "BB1496igFd40NIrr",
+                    "name": "Telegram Metropolis"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "options": {}
+            },
+            "id": "webhook-respond",
+            "name": "MAYOR_WEBHOOK_RESPOND",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.5,
+            "position": [
+                200,
+                500
+            ]
+        }
+    ],
+    "connections": {
+        "CEO_TELEGRAM_IN": {
+            "main": [
+                [
+                    {
+                        "node": "NORMALIZE_OMNI",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "IN_OMNICHANNEL": {
+            "main": [
+                [
+                    {
+                        "node": "NORMALIZE_OMNI",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "WHATSAPP_IN": {
+            "main": [
+                [
+                    {
+                        "node": "NORMALIZE_OMNI",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "SOCIAL_IN_GENERIC": {
+            "main": [
+                [
+                    {
+                        "node": "NORMALIZE_OMNI",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "NORMALIZE_OMNI": {
+            "main": [
+                [
+                    {
+                        "node": "EXECUTION_POLICY",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "EXECUTION_POLICY": {
+            "main": [
+                [
+                    {
+                        "node": "SAVE_TO_METROPOLIS_DB",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "SAVE_TO_METROPOLIS_DB": {
+            "main": [
+                [
+                    {
+                        "node": "LLM_ROUTER_EXTREME",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "LLM_ROUTER_EXTREME": {
+            "main": [
+                [
+                    {
+                        "node": "THE_MAYOR_BRAIN",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "mayor-brain-model": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "THE_MAYOR_BRAIN",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "THE_MAYOR_BRAIN": {
+            "main": [
+                [
+                    {
+                        "node": "PARSE_MAYOR_JSON",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "PARSE_MAYOR_JSON": {
+            "main": [
+                [
+                    {
+                        "node": "ENGINE_ROUTER",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "ENGINE_ROUTER": {
+            "main": [
+                [
+                    {
+                        "node": "EXECUTE_ENGINE",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "EXECUTE_ENGINE",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "EXECUTE_ENGINE",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "EXECUTE_ENGINE",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "EXECUTE_ENGINE",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "EXECUTE_ENGINE",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "EXECUTE_ENGINE",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "EXECUTE_ENGINE",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "EXECUTE_ENGINE",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "EXECUTE_ENGINE",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "EXECUTE_ENGINE": {
+            "main": [
+                [
+                    {
+                        "node": "MAYOR_TELEGRAM_OUT",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "MAYOR_WEBHOOK_RESPOND",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1"
+    }
+}

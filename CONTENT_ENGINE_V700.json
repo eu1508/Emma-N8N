@@ -1,0 +1,88 @@
+{
+    "name": "CONTENT_ENGINE_V700",
+    "nodes": [
+        {
+            "parameters": {
+                "workflowInputs": {
+                    "values": [
+                        {
+                            "name": "text",
+                            "type": "string"
+                        }
+                    ]
+                }
+            },
+            "id": "content-trigger",
+            "name": "Creative Input",
+            "type": "n8n-nodes-base.executeWorkflowTrigger",
+            "typeVersion": 1,
+            "position": [
+                240,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "modelName": "models/gemini-1.5-pro",
+                "options": {
+                    "temperature": 0.8
+                }
+            },
+            "id": "gemini-creative",
+            "name": "Creative Intelligence",
+            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+            "typeVersion": 1,
+            "position": [
+                460,
+                450
+            ],
+            "credentials": {
+                "googlePalmApi": {
+                    "id": "U6jVg3cxRNRwbqPQ",
+                    "name": "Google Gemini API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "=Du bist EMMA's kreativer Kopf.\n\nErstelle fesselnden Content (Blog, Social Media, E-Mail) basierend auf:\n{{ $json.text }}\n\nAntworte als JSON:\n{\n  \"draft\": \"Dein Text\",\n  \"headline\": \"Titel\",\n  \"audience_impact\": \"Wie wird Irina wahrgenommen?\"\n}"
+            },
+            "id": "content-logic",
+            "name": "Creative Logic",
+            "type": "@n8n/n8n-nodes-langchain.chainLlm",
+            "typeVersion": 1.4,
+            "position": [
+                460,
+                300
+            ]
+        }
+    ],
+    "connections": {
+        "Creative Input": {
+            "main": [
+                [
+                    {
+                        "node": "Creative Logic",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "gemini-creative": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "Creative Logic",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1"
+    }
+}

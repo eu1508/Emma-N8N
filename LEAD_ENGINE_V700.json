@@ -1,0 +1,120 @@
+{
+    "name": "LEAD_ENGINE_V700",
+    "nodes": [
+        {
+            "parameters": {
+                "workflowInputs": {
+                    "values": [
+                        {
+                            "name": "text",
+                            "type": "string"
+                        }
+                    ]
+                }
+            },
+            "id": "input-trigger",
+            "name": "Execute Input",
+            "type": "n8n-nodes-base.executeWorkflowTrigger",
+            "typeVersion": 1,
+            "position": [
+                240,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "modelName": "models/gemini-1.5-pro",
+                "options": {
+                    "temperature": 0.5
+                }
+            },
+            "id": "lead-analysis-model",
+            "name": "Lead Analysis Model",
+            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+            "typeVersion": 1,
+            "position": [
+                460,
+                450
+            ],
+            "credentials": {
+                "googlePalmApi": {
+                    "id": "U6jVg3cxRNRwbqPQ",
+                    "name": "Google Gemini API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "=Du bist EMMA's Lead-Generator. Deine Aufgabe ist es, aus dem Text potenzielle Leads oder Kontakte zu extrahieren.\n\nText: {{ $json.text }}\n\nAntworte als JSON:\n{\n  \"contacts\": [\n    {\n      \"name\": \"Name\",\n      \"email\": \"E-Mail\",\n      \"phone\": \"Telefon\",\n      \"company\": \"Firma\",\n      \"interest\": \"Interesse\",\n      \"score\": 1-10\n    }\n  ],\n  \"strategic_advice\": \"Wie sollen wir vorgehen?\"\n}"
+            },
+            "id": "analyze-leads",
+            "name": "Analyze Leads",
+            "type": "@n8n/n8n-nodes-langchain.chainLlm",
+            "typeVersion": 1.4,
+            "position": [
+                460,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "=INSERT INTO crm_leads (name, email, phone, company, status, interest_score, context)\nSELECT \n  name, \n  email, \n  phone, \n  company, \n  'new', \n  score, \n  '{{ $json.strategic_advice }}'\nFROM json_populate_recordset(null::crm_leads, '{{ JSON.stringify($json.contacts) }}');",
+                "options": {}
+            },
+            "id": "save-leads",
+            "name": "Save Leads to CRM",
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2,
+            "position": [
+                680,
+                300
+            ],
+            "credentials": {
+                "postgres": {
+                    "id": "q2sycFRoxqP47oRY",
+                    "name": "Postgres account"
+                }
+            }
+        }
+    ],
+    "connections": {
+        "Execute Input": {
+            "main": [
+                [
+                    {
+                        "node": "Analyze Leads",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "lead-analysis-model": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "Analyze Leads",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Analyze Leads": {
+            "main": [
+                [
+                    {
+                        "node": "Save Leads to CRM",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1"
+    }
+}

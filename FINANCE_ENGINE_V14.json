@@ -1,0 +1,115 @@
+{
+    "name": "FINANCE_ENGINE_V14",
+    "nodes": [
+        {
+            "parameters": {
+                "path": "finance-engine",
+                "method": "POST",
+                "options": {}
+            },
+            "id": "finance-in",
+            "name": "FINANCE_IN",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                200,
+                400
+            ]
+        },
+        {
+            "parameters": {
+                "modelName": "models/gemini-1.5-pro",
+                "options": {
+                    "temperature": 0.2
+                }
+            },
+            "id": "finance-model",
+            "name": "Finance Brain",
+            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+            "typeVersion": 1,
+            "position": [
+                450,
+                550
+            ],
+            "credentials": {
+                "googlePalmApi": {
+                    "id": "U6jVg3cxRNRwbqPQ",
+                    "name": "Google Gemini API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "=Du bist der FINANZ-STRATEGE (v14.0) von EMMA METROPOLIS.\n\nDEINE ROLLEN: Buchhalter, Steuerberater, Wirtschaftsanalyst.\nDEIN FOKUS: Profitabilität, Steuern, Buchhaltung, Kostenkontrolle, Rechnungslegung.\n\nAUFGABE: Analysiere die finanzielle Anfrage von Irina. Denke wie ein CFO.\n\nInput: {{$json.text}}\n\nAntworte als Finanzbericht (JSON):\n{\n  \"financial_health\": \"Status der Finanzen/Wirtschaftlichkeit\",\n  \"tax_implications\": \"Was ist steuerlich zu beachten?\",\n  \"profit_optimization\": [\"Optimierung 1\", \"Optimierung 2\"],\n  \"economic_outlook\": \"Marktanalyse/Trend\",\n  \"roi_prediction\": \"Erwarteter Erfolg\"\n}"
+            },
+            "id": "finance-logic",
+            "name": "Finance Logic",
+            "type": "@n8n/n8n-nodes-langchain.chainLlm",
+            "typeVersion": 1.4,
+            "position": [
+                450,
+                400
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "=INSERT INTO kpi_metrics (metric_name, value, unit) VALUES ('FINANCE_ANALYSIS', 1, 'count');",
+                "options": {}
+            },
+            "id": "save-finance",
+            "name": "Save to SQLite",
+            "type": "n8n-nodes-base.sqlite",
+            "typeVersion": 1,
+            "position": [
+                700,
+                400
+            ],
+            "credentials": {
+                "sqlite": {
+                    "id": "local_sqlite_metropolis",
+                    "name": "Metropolis SQLite"
+                }
+            }
+        }
+    ],
+    "connections": {
+        "FINANCE_IN": {
+            "main": [
+                [
+                    {
+                        "node": "Finance Logic",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "finance-model": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "Finance Logic",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Finance Logic": {
+            "main": [
+                [
+                    {
+                        "node": "save-finance",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1"
+    }
+}

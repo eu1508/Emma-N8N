@@ -1,0 +1,237 @@
+{
+    "name": "METROPOLIS_MULTI_AGENT_CORE",
+    "nodes": [
+        {
+            "parameters": {
+                "path": "multi-agent-core",
+                "method": "POST",
+                "options": {}
+            },
+            "id": "agent-in",
+            "name": "AGENT_IN",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                200,
+                400
+            ]
+        },
+        {
+            "parameters": {
+                "modelName": "models/gemini-1.5-pro",
+                "options": {
+                    "temperature": 0.3
+                }
+            },
+            "id": "strategy-model",
+            "name": "Strategy Model",
+            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+            "typeVersion": 1,
+            "position": [
+                450,
+                200
+            ],
+            "credentials": {
+                "googlePalmApi": {
+                    "id": "U6jVg3cxRNRwbqPQ",
+                    "name": "Google Gemini API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "=Du bist der STRATEGIE-AGENT (Metropolis v14.0).\nAnalysiere die Anfrage auf langfristigen Erfolg und CEO-Alignment.\n\nInput: {{$json.text}}\n\nAntworte kurz und präzise."
+            },
+            "id": "strategy-agent",
+            "name": "STRATEGY_AGENT",
+            "type": "@n8n/n8n-nodes-langchain.chainLlm",
+            "typeVersion": 1.4,
+            "position": [
+                600,
+                200
+            ]
+        },
+        {
+            "parameters": {
+                "modelName": "models/gemini-1.5-pro",
+                "options": {
+                    "temperature": 0.2
+                }
+            },
+            "id": "risk-model",
+            "name": "Risk Model",
+            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+            "typeVersion": 1,
+            "position": [
+                450,
+                400
+            ],
+            "credentials": {
+                "googlePalmApi": {
+                    "id": "U6jVg3cxRNRwbqPQ",
+                    "name": "Google Gemini API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "=Du bist der RISIKO-AGENT (Metropolis v14.0).\nAnalysiere die Anfrage auf Gefahren, Sicherheitslücken und ethische Risiken.\n\nInput: {{$json.text}}\n\nAntworte kurz und präzise."
+            },
+            "id": "risk-agent",
+            "name": "RISK_AGENT",
+            "type": "@n8n/n8n-nodes-langchain.chainLlm",
+            "typeVersion": 1.4,
+            "position": [
+                600,
+                400
+            ]
+        },
+        {
+            "parameters": {
+                "modelName": "models/gemini-1.5-pro",
+                "options": {
+                    "temperature": 0.6
+                }
+            },
+            "id": "opportunity-model",
+            "name": "Opportunity Model",
+            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+            "typeVersion": 1,
+            "position": [
+                450,
+                600
+            ],
+            "credentials": {
+                "googlePalmApi": {
+                    "id": "U6jVg3cxRNRwbqPQ",
+                    "name": "Google Gemini API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "=Du bist der OPPORTUNITY-AGENT (Metropolis v14.0).\nAnalysiere die Anfrage auf Wachstumschancen und ROI-Potenzial.\n\nInput: {{$json.text}}\n\nAntworte kurz und präzise."
+            },
+            "id": "opportunity-agent",
+            "name": "OPPORTUNITY_AGENT",
+            "type": "@n8n/n8n-nodes-langchain.chainLlm",
+            "typeVersion": 1.4,
+            "position": [
+                600,
+                600
+            ]
+        },
+        {
+            "parameters": {
+                "options": {}
+            },
+            "id": "agent-respond",
+            "name": "AGENT_RESPOND",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.5,
+            "position": [
+                900,
+                400
+            ]
+        }
+    ],
+    "connections": {
+        "AGENT_IN": {
+            "main": [
+                [
+                    {
+                        "node": "STRATEGY_AGENT",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "RISK_AGENT",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "OPPORTUNITY_AGENT",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "strategy-model": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "STRATEGY_AGENT",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "risk-model": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "RISK_AGENT",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "opportunity-model": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "OPPORTUNITY_AGENT",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "STRATEGY_AGENT": {
+            "main": [
+                [
+                    {
+                        "node": "AGENT_RESPOND",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "RISK_AGENT": {
+            "main": [
+                [
+                    {
+                        "node": "AGENT_RESPOND",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "OPPORTUNITY_AGENT": {
+            "main": [
+                [
+                    {
+                        "node": "AGENT_RESPOND",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1"
+    }
+}
