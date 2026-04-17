@@ -1,0 +1,178 @@
+{
+  "name": "EMMA_SELF_PROGRAMMER",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "emma-self-programmer",
+        "method": "POST",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "sp-webhook",
+      "name": "Webhook In",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const b = $json || {};\n\nconst goal = b.goal || b.task || '';\nconst repoPath = b.repoPath || 'C:\\\\Users\\\\info\\\\SynologyDrive\\\\crimson-nadir';\nconst branch = b.branch || `emma/self-program-${Date.now()}`;\nconst testCmd = b.testCmd || 'npm test';\n\nreturn [{\n  json: {\n    user: b.user || 'Emma',\n    goal,\n    repoPath,\n    branch,\n    testCmd,\n    constraints: b.constraints || [\n      'Keine Secrets im Commit',\n      'Nur kleine, reversible Änderungen',\n      'Immer Tests vor Commit'\n    ],\n    n8n: {\n      baseUrl: b.n8nBaseUrl || 'http://localhost:5678/api/v1',\n      apiKey: b.n8nApiKey || $env.N8N_API_KEY || ''\n    }\n  }\n}];"
+      },
+      "id": "sp-normalize",
+      "name": "Normalize Goal",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const j = $json;\nconst missing = [];\nif (!j.goal) missing.push('goal');\nif (!j.repoPath) missing.push('repoPath');\nif (!j.n8n.apiKey) missing.push('n8nApiKey');\n\nreturn [{ json: { ...j, valid: missing.length === 0, missing } }];"
+      },
+      "id": "sp-validate",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.valid}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "sp-if",
+      "name": "Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        920,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const j = $json;\n\nconst plan = [\n  '1) Git-Branch anlegen',\n  '2) Code ändern mit EMMA-Systemprompt',\n  '3) Tests ausführen',\n  '4) Diff prüfen + Commit',\n  '5) PR erstellen + n8n Workflow aktualisieren'\n];\n\nconst emmaPrompt = [\n  'Du bist EMMA im Self-Programming-Modus wie Claude Code.',\n  `Ziel: ${j.goal}`,\n  `Repo: ${j.repoPath}`,\n  `Branch: ${j.branch}`,\n  'Arbeite in kleinen Patches. Nach jedem Patch: Testlauf und kurze Begründung.',\n  'Wenn Test fehlschlägt: automatische Reparatur in maximal 2 Iterationen.'\n].join('\\n');\n\nconst commands = {\n  prepare: [\n    `cd \"${j.repoPath}\"`,\n    `git checkout -b \"${j.branch}\"`\n  ].join('\\n'),\n  run_tests: j.testCmd,\n  commit: 'git add -A && git commit -m \"EMMA self-programming update\"'\n};\n\nconst updateSelfBuilderCmd = [\n  '$headers = @{\"X-N8N-API-KEY\" = \"<N8N_API_KEY>\"; \"Content-Type\" = \"application/json\"}',\n  `Invoke-RestMethod -Method GET -Uri \"${j.n8n.baseUrl}/workflows\" -Headers $headers`\n].join('\\n');\n\nreturn [{\n  json: {\n    ...j,\n    plan,\n    emmaPrompt,\n    commands,\n    n8nOps: {\n      updateSelfBuilderCmd\n    }\n  }\n}];"
+      },
+      "id": "sp-plan",
+      "name": "Build Self-Programming Plan",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1150,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: \"ok\", workflow: \"EMMA_SELF_PROGRAMMER\", goal: $json.goal, plan: $json.plan, emmaPrompt: $json.emmaPrompt, commands: $json.commands, n8nOps: $json.n8nOps, constraints: $json.constraints } }}",
+        "options": {}
+      },
+      "id": "sp-respond-ok",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1380,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: \"error\", reason: \"missing_required_input\", missing: $json.missing, example: { goal: \"Baue neues n8n-Workflow-Feature\", repoPath: \"C:\\\\Users\\\\info\\\\SynologyDrive\\\\crimson-nadir\", n8nApiKey: \"***\" } } }}",
+        "options": {}
+      },
+      "id": "sp-respond-error",
+      "name": "Respond Missing Input",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1150,
+        420
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook In": {
+      "main": [
+        [
+          {
+            "node": "Normalize Goal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Goal": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid?": {
+      "main": [
+        [
+          {
+            "node": "Build Self-Programming Plan",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Missing Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Self-Programming Plan": {
+      "main": [
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

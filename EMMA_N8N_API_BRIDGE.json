@@ -1,0 +1,77 @@
+{
+  "name": "EMMA_N8N_API_BRIDGE",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "emma-n8n-api-bridge",
+        "method": "POST",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "bridge-webhook",
+      "name": "Bridge Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        220,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const body = $json || {};\nconst action = String(body.action || 'health').toLowerCase();\n\nif (action === 'health') {\n  return [{ json: {\n    status: 'ok',\n    service: 'EMMA_N8N_API_BRIDGE',\n    capabilities: ['health', 'echo', 'workflow_stats', 'help'],\n    timestamp: new Date().toISOString()\n  } }];\n}\n\nif (action === 'echo') {\n  return [{ json: {\n    status: 'ok',\n    action,\n    payload: body.payload ?? null,\n    note: 'EMMA kann über n8n externe HTTP-Tools nutzen (Internet/Bilder), wenn die Nodes verbunden sind.'\n  } }];\n}\n\nif (action === 'workflow_stats') {\n  const summary = {\n    requestedBy: body.user || 'unknown',\n    requestedAt: new Date().toISOString(),\n    hint: 'Verbinde diesen Endpoint mit n8n API Calls oder DB-Layer für Live-Stats.',\n    checks: [\n      'n8n /rest/health',\n      'n8n /api/v1/workflows',\n      'n8n /api/v1/executions?status=error'\n    ]\n  };\n  return [{ json: { status: 'ok', action, summary } }];\n}\n\nif (action === 'help') {\n  return [{ json: {\n    status: 'ok',\n    action,\n    commands: {\n      status: 'action=workflow_stats',\n      ping: 'action=health',\n      echo: 'action=echo + payload'\n    },\n    telegramReplyTemplate: 'Status: /status /health /diag verfügbar. Internet/Bilder gehen nur wenn HTTP- und OCR/Vision-Nodes im Workflow aktiv verbunden sind.'\n  } }];\n}\n\nreturn [{ json: {\n  status: 'error',\n  reason: 'unsupported_action',\n  supported: ['health', 'echo', 'workflow_stats', 'help']\n} }];"
+      },
+      "id": "bridge-router",
+      "name": "Bridge Router",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        460,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$json}}",
+        "options": {}
+      },
+      "id": "bridge-respond",
+      "name": "Bridge Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        700,
+        280
+      ]
+    }
+  ],
+  "connections": {
+    "Bridge Webhook": {
+      "main": [
+        [
+          {
+            "node": "Bridge Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bridge Router": {
+      "main": [
+        [
+          {
+            "node": "Bridge Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
