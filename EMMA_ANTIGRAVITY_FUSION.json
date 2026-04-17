@@ -1,0 +1,247 @@
+{
+  "name": "EMMA_ANTIGRAVITY_FUSION",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "emma-antigravity-fusion",
+        "method": "POST",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-in",
+      "name": "Webhook In",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const body = $json || {};\n\nconst synologyRoot = body.synologyRoot || 'C:\\\\Users\\\\info\\\\SynologyDrive';\nconst projectRoot = body.projectRoot || `${synologyRoot}\\\\crimson-nadir`;\nconst n8nBaseUrl = body.n8nBaseUrl || 'http://localhost:5678/api/v1';\nconst apiKey = body.n8nApiKey || $env.N8N_API_KEY || '';\n\nreturn [{\n  json: {\n    user: body.user || 'Emma',\n    os: 'windows',\n    synologyRoot,\n    projectRoot,\n    n8n: {\n      baseUrl: n8nBaseUrl,\n      apiKey,\n      webhookPath: 'emma-antigravity-fusion'\n    },\n    repos: {\n      skills: 'https://github.com/sickn33/antigravity-awesome-skills',\n      cleaner: 'https://github.com/tawroot/antigravity-cleaner',\n      claudeCode: 'https://github.com/anthropics/claude-code',\n      claudeCliFork: 'https://github.com/clouitreee/claude-code-CLI'\n    }\n  }\n}];"
+      },
+      "id": "normalize",
+      "name": "Normalize Synology + n8n Context",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        350,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const j = $json;\nconst missing = [];\nif (!j.n8n?.baseUrl) missing.push('n8n.baseUrl');\nif (!j.n8n?.apiKey) missing.push('n8n.apiKey');\n\nreturn [{\n  json: {\n    ...j,\n    validation: {\n      ok: missing.length === 0,\n      missing\n    }\n  }\n}];"
+      },
+      "id": "validate",
+      "name": "Validate Required Input",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        580,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.validation.ok}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-valid",
+      "name": "Config Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        810,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$json.n8n.baseUrl + \"/workflows?limit=1\"}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-N8N-API-KEY",
+              "value": "={{$json.n8n.apiKey}}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "probe-api",
+      "name": "Probe n8n API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1040,
+        220
+      ],
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "functionCode": "const j = $json;\nconst statusCode = j.statusCode || j.code || null;\nconst probeOk = !!(j.statusCode && j.statusCode >= 200 && j.statusCode < 300);\n\nreturn [{\n  json: {\n    ...j,\n    probe: {\n      ok: probeOk,\n      statusCode: statusCode,\n      note: probeOk ? 'n8n API erreichbar' : 'n8n API nicht erreichbar oder Auth fehlgeschlagen'\n    }\n  }\n}];"
+      },
+      "id": "assess-probe",
+      "name": "Assess Probe Result",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1260,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const j = $json;\n\nconst powerShellSetup = [\n  `$synology = \"${j.synologyRoot}\"`,\n  `$project = \"${j.projectRoot}\"`,\n  'New-Item -ItemType Directory -Force -Path $project | Out-Null',\n  'Set-Location $project',\n  'irm https://claude.ai/install.ps1 | iex',\n  'npx -y antigravity-awesome-skills --path ~/.codex/skills',\n  'npx -y antigravity-awesome-skills --path ~/.claude/skills',\n  'iwr https://raw.githubusercontent.com/tawroot/antigravity-cleaner/main/install.ps1 -useb | iex'\n].join('\\n');\n\nconst bridgeWorkflow = {\n  name: 'EMMA_N8N_API_BRIDGE',\n  nodes: [\n    {\n      parameters: { path: 'emma-n8n-api-bridge', method: 'POST', responseMode: 'responseNode', options: {} },\n      id: 'bridge-webhook',\n      name: 'Bridge Webhook',\n      type: 'n8n-nodes-base.webhook',\n      typeVersion: 1,\n      position: [240, 280]\n    },\n    {\n      parameters: { functionCode: 'return [{ json: { status: \"ok\", source: \"EMMA_N8N_API_BRIDGE\", input: $json } }];' },\n      id: 'bridge-function',\n      name: 'Bridge Function',\n      type: 'n8n-nodes-base.function',\n      typeVersion: 1,\n      position: [460, 280]\n    },\n    {\n      parameters: { respondWith: 'json', responseBody: '={{$json}}', options: {} },\n      id: 'bridge-respond',\n      name: 'Bridge Respond',\n      type: 'n8n-nodes-base.respondToWebhook',\n      typeVersion: 1,\n      position: [680, 280]\n    }\n  ],\n  connections: {\n    'Bridge Webhook': { main: [[{ node: 'Bridge Function', type: 'main', index: 0 }]] },\n    'Bridge Function': { main: [[{ node: 'Bridge Respond', type: 'main', index: 0 }]] }\n  },\n  active: false,\n  settings: { executionOrder: 'v1' }\n};\n\nconst createBridgeCmd = [\n  '$headers = @{\"X-N8N-API-KEY\" = \"<N8N_API_KEY>\"; \"Content-Type\" = \"application/json\"}',\n  `$body = @'${JSON.stringify(bridgeWorkflow, null, 2)}'@`,\n  `Invoke-RestMethod -Method POST -Uri \"${j.n8n.baseUrl}/workflows\" -Headers $headers -Body $body`\n].join('\\n');\n\nreturn [{\n  json: {\n    ...j,\n    artifacts: {\n      emmaSystemPrompt: [\n        'Du bist EMMA auf Synology.',\n        `Projektpfad: ${j.projectRoot}`,\n        'Priorität: n8n API zuerst, danach lokale Agenten-Tools.'\n      ].join('\\n'),\n      powerShellSetup,\n      n8nProbe: j.probe,\n      createBridgeCmd,\n      bridgeWorkflow\n    }\n  }\n}];"
+      },
+      "id": "build-assets",
+      "name": "Build EMMA Assets",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1480,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: \"error\", reason: \"missing_required_config\", missing: $json.validation.missing, hint: \"Sende n8nApiKey im Request oder setze N8N_API_KEY in n8n.\" } }}",
+        "options": {}
+      },
+      "id": "respond-invalid",
+      "name": "Respond Invalid Config",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: \"ok\", workflow: \"EMMA_ANTIGRAVITY_FUSION\", context: { user: $json.user, synologyRoot: $json.synologyRoot, projectRoot: $json.projectRoot, n8nBaseUrl: $json.n8n.baseUrl }, probe: $json.artifacts.n8nProbe, artifacts: $json.artifacts, repos: $json.repos } }}",
+        "options": {}
+      },
+      "id": "respond-ok",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1710,
+        220
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook In": {
+      "main": [
+        [
+          {
+            "node": "Normalize Synology + n8n Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Synology + n8n Context": {
+      "main": [
+        [
+          {
+            "node": "Validate Required Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Required Input": {
+      "main": [
+        [
+          {
+            "node": "Config Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config Valid?": {
+      "main": [
+        [
+          {
+            "node": "Probe n8n API",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Invalid Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Probe n8n API": {
+      "main": [
+        [
+          {
+            "node": "Assess Probe Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assess Probe Result": {
+      "main": [
+        [
+          {
+            "node": "Build EMMA Assets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build EMMA Assets": {
+      "main": [
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
