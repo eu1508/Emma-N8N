@@ -1,53 +1,97 @@
 {
-    "name": "LOGGING_ENGINE_V700",
-    "nodes": [
-        {
-            "parameters": {
-                "path": "logging-engine",
-                "options": {}
+  "name": "LOGGING_ENGINE_V700",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "logging-engine",
+        "options": {},
+        "method": "POST"
+      },
+      "id": "webhook-in",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "text",
+              "type": "string"
             },
-            "id": "webhook-in",
-            "name": "Webhook",
-            "type": "n8n-nodes-base.webhook",
-            "typeVersion": 1,
-            "position": [
-                200,
-                300
-            ]
-        },
-        {
-            "parameters": {
-                "operation": "executeQuery",
-                "query": "=INSERT INTO engine_registry (engine_name, status, version) VALUES ('GENERAL_LOG', 'INFO', 'v14.0');",
-                "options": {}
+            {
+              "name": "engine",
+              "type": "string"
             },
-            "id": "log-to-sqlite",
-            "name": "Log to Local SQLite",
-            "type": "n8n-nodes-base.sqlite",
-            "typeVersion": 1,
-            "position": [
-                450,
-                300
-            ],
-            "credentials": {
-                "sqlite": {
-                    "id": "local_sqlite_metropolis",
-                    "name": "Metropolis SQLite"
-                }
+            {
+              "name": "source",
+              "type": "string"
             }
+          ]
         }
-    ],
-    "connections": {
-        "Webhook": {
-            "main": [
-                [
-                    {
-                        "node": "log-to-sqlite",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
+      },
+      "id": "execute-input",
+      "name": "Execute Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=INSERT INTO engine_registry (engine_name, status, version) VALUES ('GENERAL_LOG', 'INFO', 'v14.0');",
+        "options": {}
+      },
+      "id": "log-to-sqlite",
+      "name": "Log to Local SQLite",
+      "type": "n8n-nodes-base.sqlite",
+      "typeVersion": 1,
+      "position": [
+        450,
+        300
+      ],
+      "credentials": {
+        "sqlite": {
+          "id": "local_sqlite_metropolis",
+          "name": "Metropolis SQLite"
         }
+      }
     }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Log to Local SQLite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Input": {
+      "main": [
+        [
+          {
+            "node": "Log to Local SQLite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "emma-repaired-2026-05-15"
 }

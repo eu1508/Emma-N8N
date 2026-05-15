@@ -1,54 +1,65 @@
 {
-    "name": "DRIVE_ENGINE_V700",
-    "nodes": [
-        {
-            "parameters": {
-                "workflowInputs": {
-                    "values": [
-                        {
-                            "name": "text",
-                            "type": "string"
-                        }
-                    ]
-                }
+  "name": "DRIVE_ENGINE_V700",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "text",
+              "type": "string"
             },
-            "id": "trigger",
-            "name": "Execute Input",
-            "type": "n8n-nodes-base.executeWorkflowTrigger",
-            "typeVersion": 1,
-            "position": [
-                240,
-                300
-            ]
-        },
-        {
-            "parameters": {
-                "notice": "Zentrale Dateisystem-Steuerung für Drive."
+            {
+              "name": "engine",
+              "type": "string"
             },
-            "id": "info",
-            "name": "Drive Commander",
-            "type": "n8n-nodes-base.noOp",
-            "typeVersion": 1,
-            "position": [
-                460,
-                300
-            ]
+            {
+              "name": "source",
+              "type": "string"
+            }
+          ]
         }
-    ],
-    "connections": {
-        "trigger": {
-            "main": [
-                [
-                    {
-                        "node": "info",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        }
+      },
+      "id": "trigger",
+      "name": "Execute Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
     },
-    "settings": {
-        "executionOrder": "v1"
+    {
+      "parameters": {
+        "notice": "Zentrale Dateisystem-Steuerung für Drive."
+      },
+      "id": "info",
+      "name": "Drive Commander",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ],
+      "notesInFlow": true,
+      "notes": "Skill DRIVE: Drive/Datei-Organisation: Ordner, Dokumente und Ablagepläne eindeutig strukturieren. Dieser Platzhalter ist absichtlich safe-by-default und kann später mit Service-spezifischen Credentials erweitert werden."
     }
+  ],
+  "connections": {
+    "Execute Input": {
+      "main": [
+        [
+          {
+            "node": "Drive Commander",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "emma-repaired-2026-05-15"
 }

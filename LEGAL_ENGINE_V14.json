@@ -1,115 +1,155 @@
 {
-    "name": "LEGAL_ENGINE_V14",
-    "nodes": [
-        {
-            "parameters": {
-                "path": "legal-engine",
-                "method": "POST",
-                "options": {}
-            },
-            "id": "legal-in",
-            "name": "LEGAL_IN",
-            "type": "n8n-nodes-base.webhook",
-            "typeVersion": 1,
-            "position": [
-                200,
-                400
-            ]
-        },
-        {
-            "parameters": {
-                "modelName": "models/gemini-1.5-pro",
-                "options": {
-                    "temperature": 0.1
-                }
-            },
-            "id": "legal-model",
-            "name": "Legal Brain",
-            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
-            "typeVersion": 1,
-            "position": [
-                450,
-                550
-            ],
-            "credentials": {
-                "googlePalmApi": {
-                    "id": "U6jVg3cxRNRwbqPQ",
-                    "name": "Google Gemini API"
-                }
-            }
-        },
-        {
-            "parameters": {
-                "promptType": "define",
-                "text": "=Du bist der JURISTISCHE KERNTEX (v14.0) von EMMA METROPOLIS.\n\nDEINE ROLLEN: Anwalt, Richter, Notar.\nDEIN FOKUS: Präzision, Gesetze, Verträge, Haftung, Firmenrecht.\n\nAUFGABE: Analysiere die Anfrage von Irina auf rechtliche Implikationen. Nutze deutsche Rechtsprechung (BGB, HGB) als Basis.\n\nInput: {{$json.text}}\n\nAntworte als rechtliches Gutachten (JSON):\n{\n  \"legal_status\": \"Einschätzung der Lage\",\n  \"risks\": [\"Risiko 1\", \"Risiko 2\"],\n  \"recommendation\": \"Was sollte Irina tun?\",\n  \"statutes\": [\"Paragraphen/Gesetze\"],\n  \"sovereignty_score\": 100\n}"
-            },
-            "id": "legal-logic",
-            "name": "Legal Logic",
-            "type": "@n8n/n8n-nodes-langchain.chainLlm",
-            "typeVersion": 1.4,
-            "position": [
-                450,
-                400
-            ]
-        },
-        {
-            "parameters": {
-                "operation": "executeQuery",
-                "query": "=INSERT INTO interaction_memory (session_id, user_id, channel, input) VALUES ('LEGAL_LOG', 'SYSTEM', 'INTERNAL', 'Legal analysis for: ' || '{{$json.legal_status}}');",
-                "options": {}
-            },
-            "id": "save-legal",
-            "name": "Save to SQLite",
-            "type": "n8n-nodes-base.sqlite",
-            "typeVersion": 1,
-            "position": [
-                700,
-                400
-            ],
-            "credentials": {
-                "sqlite": {
-                    "id": "local_sqlite_metropolis",
-                    "name": "Metropolis SQLite"
-                }
-            }
-        }
-    ],
-    "connections": {
-        "LEGAL_IN": {
-            "main": [
-                [
-                    {
-                        "node": "Legal Logic",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "legal-model": {
-            "ai_languageModel": [
-                [
-                    {
-                        "node": "Legal Logic",
-                        "type": "ai_languageModel",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "Legal Logic": {
-            "main": [
-                [
-                    {
-                        "node": "save-legal",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        }
+  "name": "LEGAL_ENGINE_V14",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "legal-engine",
+        "method": "POST",
+        "options": {}
+      },
+      "id": "legal-in",
+      "name": "LEGAL_IN",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        200,
+        400
+      ]
     },
-    "settings": {
-        "executionOrder": "v1"
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "text",
+              "type": "string"
+            },
+            {
+              "name": "engine",
+              "type": "string"
+            },
+            {
+              "name": "source",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "execute-input",
+      "name": "Execute Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "id": "legal-model",
+      "name": "Legal Brain",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        450,
+        550
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "U6jVg3cxRNRwbqPQ",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=SYSTEM-REGELN FÜR EMMA METROPOLIS:\n- Antworte immer als valides JSON-Objekt, ohne Markdown, ohne Erklärtext außerhalb des JSON.\n- Nutze als Eingang bevorzugt: {{ $json.text || $json.chatInput || $json.body?.text || $json.message?.text || $json.task || JSON.stringify($json) }}\n- Wenn Informationen fehlen, setze sinnvolle Defaults und gib im Feld \"missing_inputs\" eine kurze Liste zurück.\n- Keine Secrets, Tokens oder Credentials ausgeben. Externe Aktionen nur als sichere, prüfbare Aktionspläne formulieren.\n- Jede Antwort muss \"skill\", \"status\", \"summary\", \"actions\" und \"next_step\" enthalten.\n- Aktiver Skill: LEGAL — Recht: Risiken und Vertrags-/Compliance-Punkte als Orientierung strukturieren; keine Rechtsberatung vortäuschen.\n\nWORKFLOW-PROMPT:\nDu bist der JURISTISCHE KERNTEX (v14.0) von EMMA METROPOLIS.\n\nDEINE ROLLEN: Anwalt, Richter, Notar.\nDEIN FOKUS: Präzision, Gesetze, Verträge, Haftung, Firmenrecht.\n\nAUFGABE: Analysiere die Anfrage von Irina auf rechtliche Implikationen. Nutze deutsche Rechtsprechung (BGB, HGB) als Basis.\n\nInput: {{$json.text}}\n\nAntworte als rechtliches Gutachten (JSON):\n{\n  \"legal_status\": \"Einschätzung der Lage\",\n  \"risks\": [\"Risiko 1\", \"Risiko 2\"],\n  \"recommendation\": \"Was sollte Irina tun?\",\n  \"statutes\": [\"Paragraphen/Gesetze\"],\n  \"sovereignty_score\": 100\n}"
+      },
+      "id": "legal-logic",
+      "name": "Legal Logic",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        450,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=INSERT INTO interaction_memory (session_id, user_id, channel, input) VALUES ('LEGAL_LOG', 'SYSTEM', 'INTERNAL', 'Legal analysis for: ' || '{{$json.legal_status}}');",
+        "options": {}
+      },
+      "id": "save-legal",
+      "name": "Save to SQLite",
+      "type": "n8n-nodes-base.sqlite",
+      "typeVersion": 1,
+      "position": [
+        700,
+        400
+      ],
+      "credentials": {
+        "sqlite": {
+          "id": "local_sqlite_metropolis",
+          "name": "Metropolis SQLite"
+        }
+      }
     }
+  ],
+  "connections": {
+    "LEGAL_IN": {
+      "main": [
+        [
+          {
+            "node": "Legal Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Legal Brain": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Legal Logic",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Legal Logic": {
+      "main": [
+        [
+          {
+            "node": "Save to SQLite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Input": {
+      "main": [
+        [
+          {
+            "node": "Legal Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "emma-repaired-2026-05-15"
 }

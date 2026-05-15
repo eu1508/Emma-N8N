@@ -1,62 +1,97 @@
 {
-    "name": "INTELLIGENCE_ENGINE_V700",
-    "nodes": [
-        {
-            "parameters": {
-                "workflowInputs": {
-                    "values": [
-                        {
-                            "name": "text",
-                            "type": "string"
-                        }
-                    ]
-                }
+  "name": "INTELLIGENCE_ENGINE_V700",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "text",
+              "type": "string"
             },
-            "id": "trigger",
-            "name": "Execute Input",
-            "type": "n8n-nodes-base.executeWorkflowTrigger",
-            "typeVersion": 1,
-            "position": [
-                240,
-                300
-            ]
-        },
-        {
-            "parameters": {
-                "modelName": "models/gemini-1.5-pro",
-                "promptType": "define",
-                "text": "Durchführe strategische Analyse auf höchstem Niveau für: {{ $json.text }}"
+            {
+              "name": "engine",
+              "type": "string"
             },
-            "id": "gemini",
-            "name": "Archon Intelligence",
-            "type": "@n8n/n8n-nodes-langchain.chainLlm",
-            "typeVersion": 1.4,
-            "position": [
-                460,
-                300
-            ],
-            "credentials": {
-                "googlePalmApi": {
-                    "id": "U6jVg3cxRNRwbqPQ",
-                    "name": "Google Gemini API"
-                }
+            {
+              "name": "source",
+              "type": "string"
             }
+          ]
         }
-    ],
-    "connections": {
-        "trigger": {
-            "main": [
-                [
-                    {
-                        "node": "gemini",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        }
+      },
+      "id": "trigger",
+      "name": "Execute Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
     },
-    "settings": {
-        "executionOrder": "v1"
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=SYSTEM-REGELN FÜR EMMA METROPOLIS:\n- Antworte immer als valides JSON-Objekt, ohne Markdown, ohne Erklärtext außerhalb des JSON.\n- Nutze als Eingang bevorzugt: {{ $json.text || $json.chatInput || $json.body?.text || $json.message?.text || $json.task || JSON.stringify($json) }}\n- Wenn Informationen fehlen, setze sinnvolle Defaults und gib im Feld \"missing_inputs\" eine kurze Liste zurück.\n- Keine Secrets, Tokens oder Credentials ausgeben. Externe Aktionen nur als sichere, prüfbare Aktionspläne formulieren.\n- Jede Antwort muss \"skill\", \"status\", \"summary\", \"actions\" und \"next_step\" enthalten.\n- Aktiver Skill: INTELLIGENCE — Strategische Intelligenz: Markt-, Wettbewerbs- und Musteranalyse liefern.\n\nWORKFLOW-PROMPT:\nDurchführe strategische Analyse auf höchstem Niveau für: {{ $json.text }}"
+      },
+      "id": "gemini",
+      "name": "Archon Intelligence",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "gemini-model",
+      "name": "Archon Intelligence Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        460,
+        480
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "U6jVg3cxRNRwbqPQ",
+          "name": "Google Gemini API"
+        }
+      }
     }
+  ],
+  "connections": {
+    "Execute Input": {
+      "main": [
+        [
+          {
+            "node": "Archon Intelligence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Archon Intelligence Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Archon Intelligence",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "emma-repaired-2026-05-15"
 }

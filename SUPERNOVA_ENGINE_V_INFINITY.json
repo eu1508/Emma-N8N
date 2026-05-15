@@ -1,115 +1,155 @@
 {
-    "name": "SUPERNOVA_ENGINE_V_INFINITY",
-    "nodes": [
-        {
-            "parameters": {
-                "path": "supernova",
-                "method": "POST",
-                "options": {}
-            },
-            "id": "supernova-input",
-            "name": "Supernova Access",
-            "type": "n8n-nodes-base.webhook",
-            "typeVersion": 1,
-            "position": [
-                200,
-                400
-            ]
-        },
-        {
-            "parameters": {
-                "modelName": "models/gemini-1.5-pro",
-                "options": {
-                    "temperature": 0.9
-                }
-            },
-            "id": "gemini-supernova",
-            "name": "Supernova Brain",
-            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
-            "typeVersion": 1,
-            "position": [
-                420,
-                550
-            ],
-            "credentials": {
-                "googlePalmApi": {
-                    "id": "U6jVg3cxRNRwbqPQ",
-                    "name": "Google Gemini API"
-                }
-            }
-        },
-        {
-            "parameters": {
-                "promptType": "define",
-                "text": "=Du bist EMMA Supernova vInfinity (Metropolis v14.0).\n\nDEINE MISSION:\nMaximale kognitive Leistung. 2046 Vision. CEO-Autonomie.\nInput: {{$json.text}}\n\nAntworte als kognitiver Impuls (JSON):\n{\n  \"burst_mode\": true,\n  \"strategic_breakthrough\": \"Ein neuer Weg für die Metropole\",\n  \"autonomous_actions\": [\"Action 1\", \"Action 2\"],\n  \"value_generated\": \"Erhöhter Status/Profit\",\n  \"message_to_irina\": \"Eine Botschaft der Macht\"\n}"
-            },
-            "id": "supernova-logic",
-            "name": "Supernova Logic",
-            "type": "@n8n/n8n-nodes-langchain.chainLlm",
-            "typeVersion": 1.4,
-            "position": [
-                420,
-                400
-            ]
-        },
-        {
-            "parameters": {
-                "operation": "executeQuery",
-                "query": "=INSERT INTO global_registry (key, value, context) VALUES ('SUPERNOVA_LAST_BURST', '{{ $json.strategic_breakthrough }}', '{{ JSON.stringify($json) }}');",
-                "options": {}
-            },
-            "id": "save-burst",
-            "name": "Save Burst Status",
-            "type": "n8n-nodes-base.sqlite",
-            "typeVersion": 1,
-            "position": [
-                640,
-                400
-            ],
-            "credentials": {
-                "sqlite": {
-                    "id": "local_sqlite_metropolis",
-                    "name": "Metropolis SQLite"
-                }
-            }
-        }
-    ],
-    "connections": {
-        "Supernova Access": {
-            "main": [
-                [
-                    {
-                        "node": "Supernova Logic",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "gemini-supernova": {
-            "ai_languageModel": [
-                [
-                    {
-                        "node": "Supernova Logic",
-                        "type": "ai_languageModel",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "Supernova Logic": {
-            "main": [
-                [
-                    {
-                        "node": "Save Burst Status",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        }
+  "name": "SUPERNOVA_ENGINE_V_INFINITY",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "supernova",
+        "method": "POST",
+        "options": {}
+      },
+      "id": "supernova-input",
+      "name": "Supernova Access",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        200,
+        400
+      ]
     },
-    "settings": {
-        "executionOrder": "v1"
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "text",
+              "type": "string"
+            },
+            {
+              "name": "engine",
+              "type": "string"
+            },
+            {
+              "name": "source",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "execute-input",
+      "name": "Execute Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0.9
+        }
+      },
+      "id": "gemini-supernova",
+      "name": "Supernova Brain",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        420,
+        550
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "U6jVg3cxRNRwbqPQ",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=SYSTEM-REGELN FÜR EMMA METROPOLIS:\n- Antworte immer als valides JSON-Objekt, ohne Markdown, ohne Erklärtext außerhalb des JSON.\n- Nutze als Eingang bevorzugt: {{ $json.text || $json.chatInput || $json.body?.text || $json.message?.text || $json.task || JSON.stringify($json) }}\n- Wenn Informationen fehlen, setze sinnvolle Defaults und gib im Feld \"missing_inputs\" eine kurze Liste zurück.\n- Keine Secrets, Tokens oder Credentials ausgeben. Externe Aktionen nur als sichere, prüfbare Aktionspläne formulieren.\n- Jede Antwort muss \"skill\", \"status\", \"summary\", \"actions\" und \"next_step\" enthalten.\n- Aktiver Skill: SUPERNOVA — High-level Strategie: Durchbrüche, autonome Aktionsliste und Wertbeitrag liefern.\n\nWORKFLOW-PROMPT:\nDu bist EMMA Supernova vInfinity (Metropolis v14.0).\n\nDEINE MISSION:\nMaximale kognitive Leistung. 2046 Vision. CEO-Autonomie.\nInput: {{$json.text}}\n\nAntworte als kognitiver Impuls (JSON):\n{\n  \"burst_mode\": true,\n  \"strategic_breakthrough\": \"Ein neuer Weg für die Metropole\",\n  \"autonomous_actions\": [\"Action 1\", \"Action 2\"],\n  \"value_generated\": \"Erhöhter Status/Profit\",\n  \"message_to_irina\": \"Eine Botschaft der Macht\"\n}"
+      },
+      "id": "supernova-logic",
+      "name": "Supernova Logic",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        420,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=INSERT INTO global_registry (key, value, context) VALUES ('SUPERNOVA_LAST_BURST', '{{ $json.strategic_breakthrough }}', '{{ JSON.stringify($json) }}');",
+        "options": {}
+      },
+      "id": "save-burst",
+      "name": "Save Burst Status",
+      "type": "n8n-nodes-base.sqlite",
+      "typeVersion": 1,
+      "position": [
+        640,
+        400
+      ],
+      "credentials": {
+        "sqlite": {
+          "id": "local_sqlite_metropolis",
+          "name": "Metropolis SQLite"
+        }
+      }
     }
+  ],
+  "connections": {
+    "Supernova Access": {
+      "main": [
+        [
+          {
+            "node": "Supernova Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supernova Brain": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Supernova Logic",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supernova Logic": {
+      "main": [
+        [
+          {
+            "node": "Save Burst Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Input": {
+      "main": [
+        [
+          {
+            "node": "Supernova Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "emma-repaired-2026-05-15"
 }

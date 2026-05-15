@@ -1,54 +1,65 @@
 {
-    "name": "BITWARDEN_ENGINE_V700",
-    "nodes": [
-        {
-            "parameters": {
-                "workflowInputs": {
-                    "values": [
-                        {
-                            "name": "text",
-                            "type": "string"
-                        }
-                    ]
-                }
+  "name": "BITWARDEN_ENGINE_V700",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "text",
+              "type": "string"
             },
-            "id": "trigger",
-            "name": "Execute Input",
-            "type": "n8n-nodes-base.executeWorkflowTrigger",
-            "typeVersion": 1,
-            "position": [
-                240,
-                300
-            ]
-        },
-        {
-            "parameters": {
-                "notice": "Sicherheits-Engine für Passwörter und Secrets."
+            {
+              "name": "engine",
+              "type": "string"
             },
-            "id": "info",
-            "name": "Security Vault",
-            "type": "n8n-nodes-base.noOp",
-            "typeVersion": 1,
-            "position": [
-                460,
-                300
-            ]
+            {
+              "name": "source",
+              "type": "string"
+            }
+          ]
         }
-    ],
-    "connections": {
-        "trigger": {
-            "main": [
-                [
-                    {
-                        "node": "info",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        }
+      },
+      "id": "trigger",
+      "name": "Execute Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
     },
-    "settings": {
-        "executionOrder": "v1"
+    {
+      "parameters": {
+        "notice": "Sicherheits-Engine für Passwörter und Secrets."
+      },
+      "id": "info",
+      "name": "Security Vault",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ],
+      "notesInFlow": true,
+      "notes": "Skill BITWARDEN: Sicherheits- und Vault-Governance: keine Secrets ausgeben, nur sichere Rotations- und Prüfpläne liefern. Dieser Platzhalter ist absichtlich safe-by-default und kann später mit Service-spezifischen Credentials erweitert werden."
     }
+  ],
+  "connections": {
+    "Execute Input": {
+      "main": [
+        [
+          {
+            "node": "Security Vault",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "emma-repaired-2026-05-15"
 }

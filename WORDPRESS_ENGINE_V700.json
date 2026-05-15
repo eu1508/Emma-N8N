@@ -1,88 +1,97 @@
 {
-    "name": "WORDPRESS_ENGINE_V700",
-    "nodes": [
-        {
-            "parameters": {
-                "workflowInputs": {
-                    "values": [
-                        {
-                            "name": "text",
-                            "type": "string"
-                        }
-                    ]
-                }
+  "name": "WORDPRESS_ENGINE_V700",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "text",
+              "type": "string"
             },
-            "id": "wp-input",
-            "name": "WordPress Command",
-            "type": "n8n-nodes-base.executeWorkflowTrigger",
-            "typeVersion": 1,
-            "position": [
-                240,
-                300
-            ]
-        },
-        {
-            "parameters": {
-                "modelName": "models/gemini-1.5-pro",
-                "options": {
-                    "temperature": 0.3
-                }
+            {
+              "name": "engine",
+              "type": "string"
             },
-            "id": "gemini-wp",
-            "name": "WP Intelligence",
-            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
-            "typeVersion": 1,
-            "position": [
-                460,
-                450
-            ],
-            "credentials": {
-                "googlePalmApi": {
-                    "id": "U6jVg3cxRNRwbqPQ",
-                    "name": "Google Gemini API"
-                }
+            {
+              "name": "source",
+              "type": "string"
             }
-        },
-        {
-            "parameters": {
-                "promptType": "define",
-                "text": "=Du bist EMMA's Content-Managerin für WordPress.\n\nErstelle einen Post-Entwurf oder bearbeite Seiten basierend auf:\n{{ $json.text }}\n\nAntworte als JSON:\n{\n  \"action\": \"CREATE_POST|EDIT_PAGE|MANAGE_MEDIA\",\n  \"content_draft\": \"...\",\n  \"metadata\": { \"status\": \"draft\" }\n}"
-            },
-            "id": "wp-logic",
-            "name": "WordPress Logic",
-            "type": "@n8n/n8n-nodes-langchain.chainLlm",
-            "typeVersion": 1.4,
-            "position": [
-                460,
-                300
-            ]
+          ]
         }
-    ],
-    "connections": {
-        "WordPress Command": {
-            "main": [
-                [
-                    {
-                        "node": "WordPress Logic",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "gemini-wp": {
-            "ai_languageModel": [
-                [
-                    {
-                        "node": "WordPress Logic",
-                        "type": "ai_languageModel",
-                        "index": 0
-                    }
-                ]
-            ]
-        }
+      },
+      "id": "wp-input",
+      "name": "WordPress Command",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
     },
-    "settings": {
-        "executionOrder": "v1"
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "gemini-wp",
+      "name": "WP Intelligence",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        460,
+        450
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "U6jVg3cxRNRwbqPQ",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=SYSTEM-REGELN FÜR EMMA METROPOLIS:\n- Antworte immer als valides JSON-Objekt, ohne Markdown, ohne Erklärtext außerhalb des JSON.\n- Nutze als Eingang bevorzugt: {{ $json.text || $json.chatInput || $json.body?.text || $json.message?.text || $json.task || JSON.stringify($json) }}\n- Wenn Informationen fehlen, setze sinnvolle Defaults und gib im Feld \"missing_inputs\" eine kurze Liste zurück.\n- Keine Secrets, Tokens oder Credentials ausgeben. Externe Aktionen nur als sichere, prüfbare Aktionspläne formulieren.\n- Jede Antwort muss \"skill\", \"status\", \"summary\", \"actions\" und \"next_step\" enthalten.\n- Aktiver Skill: WORDPRESS — WordPress: Beiträge, Seiten, Medien und SEO-Metadaten als Entwurf vorbereiten.\n\nWORKFLOW-PROMPT:\nDu bist EMMA's Content-Managerin für WordPress.\n\nErstelle einen Post-Entwurf oder bearbeite Seiten basierend auf:\n{{ $json.text }}\n\nAntworte als JSON:\n{\n  \"action\": \"CREATE_POST|EDIT_PAGE|MANAGE_MEDIA\",\n  \"content_draft\": \"...\",\n  \"metadata\": { \"status\": \"draft\" }\n}"
+      },
+      "id": "wp-logic",
+      "name": "WordPress Logic",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        460,
+        300
+      ]
     }
+  ],
+  "connections": {
+    "WordPress Command": {
+      "main": [
+        [
+          {
+            "node": "WordPress Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WP Intelligence": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "WordPress Logic",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "emma-repaired-2026-05-15"
 }
