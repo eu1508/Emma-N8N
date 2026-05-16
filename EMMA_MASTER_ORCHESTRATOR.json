@@ -70,7 +70,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const src = $json;\nconst isTelegram = !!src.message?.chat?.id;\nreturn [{\n  json: {\n    text: isTelegram ? src.message.text : (src.text || src.body || src.message || ''),\n    sender: isTelegram ? (src.message.from?.username || src.message.from?.id) : (src.sender || 'UNBEKANNT'),\n    channel: isTelegram ? 'TELEGRAM' : 'WEBHOOK',\n    chat_id: isTelegram ? src.message.chat.id : null,\n    meta: src,\n    timestamp: new Date().toISOString(),\n    session_id: `${isTelegram ? 'TG' : 'WB'}_${Date.now()}`\n  }\n}];"
+        "functionCode": "const src = $json;\nconst isTelegram = !!src.message?.chat?.id;\nreturn [{\n  json: {\n    text: isTelegram ? src.message.text : (src.text || src.body?.text || src.body || src.message?.text || src.message || ''),\n    original_input: isTelegram ? src.message.text : (src.text || src.body?.text || src.body || src.message?.text || src.message || ''),\n    sender: isTelegram ? (src.message.from?.username || src.message.from?.id) : (src.sender || 'UNBEKANNT'),\n    channel: isTelegram ? 'TELEGRAM' : 'WEBHOOK',\n    chat_id: isTelegram ? src.message.chat.id : null,\n    meta: src,\n    timestamp: new Date().toISOString(),\n    session_id: `${isTelegram ? 'TG' : 'WB'}_${Date.now()}`\n  }\n}];"
       },
       "id": "normalize-omni",
       "name": "NORMALIZE_OMNI",
@@ -97,7 +97,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "=INSERT INTO interaction_memory (session_id, user_id, channel, input) VALUES ('{{ $json.session_id }}', '{{ $json.sender }}', '{{ $json.channel }}', '{{ $json.text }}');",
+        "query": "=CREATE TABLE IF NOT EXISTS interaction_memory (session_id TEXT, user_id TEXT, channel TEXT, input TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP); INSERT INTO interaction_memory (session_id, user_id, channel, input) VALUES ('{{ $json.session_id }}', '{{ $json.sender }}', '{{ $json.channel }}', '{{ $json.text }}');",
         "options": {}
       },
       "id": "sqlite-save",
@@ -113,7 +113,11 @@
           "id": "local_sqlite_metropolis",
           "name": "Metropolis SQLite"
         }
-      }
+      },
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
     },
     {
       "parameters": {
@@ -153,7 +157,7 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=SYSTEM-REGELN FÜR EMMA METROPOLIS:\n- Antworte immer als valides JSON-Objekt, ohne Markdown, ohne Erklärtext außerhalb des JSON.\n- Nutze als Eingang bevorzugt: {{ $json.text || $json.chatInput || $json.body?.text || $json.message?.text || $json.task || JSON.stringify($json) }}\n- Wenn Informationen fehlen, setze sinnvolle Defaults und gib im Feld \"missing_inputs\" eine kurze Liste zurück.\n- Keine Secrets, Tokens oder Credentials ausgeben. Externe Aktionen nur als sichere, prüfbare Aktionspläne formulieren.\n- Jede Antwort muss \"skill\", \"status\", \"summary\", \"actions\" und \"next_step\" enthalten.\n- Aktiver Skill: THE_MAYOR — zentraler Router zwischen Chatbot/Telegram/Webhooks und allen spezialisierten Workflows\n\nWORKFLOW-PROMPT:\nDu bist THE MAYOR (v14.0) von EMMA METROPOLIS.\n\nZEIT: 2046. STATUS: Sovereign OS. PERSONA: CEO.\nEINGANG: {{ $json.text || $json.chatInput || JSON.stringify($json) }}\nVORGESCHLAGENER ENGINE-SKILL: {{ $json.engine }}\n\nWähle genau einen Engine-Skill aus dieser Liste: LEAD|SALES|SUPERNOVA|CONTENT|CRM|KI_AGENT|LEGAL|FINANCE|VENTURE|INTEL|GITHUB|ASANA|SHOPIFY|WORDPRESS|DISCORD|GOOGLE_SUITE|EMAIL_VALIDATION|GUARDIAN|PRICING|QUICKCHART|REACTIVATION|SPOTIFY|STREAMS|EVOLUTION|INTELLIGENCE|BITWARDEN|DRIVE|LOGGING|KPI|MULTI_AGENT|SYNC|VECTOR_MEMORY|SELF_BUILDER.\nAntworte als JSON:\n{\n  \"skill\": \"THE_MAYOR\",\n  \"engine\": \"EXAKTER_ENGINE_SKILL\",\n  \"status\": \"OK\",\n  \"intent_2046\": \"Visionäre Einordnung\",\n  \"summary\": \"Kurzantwort an Irina\",\n  \"actions\": [\"konkreter nächster Schritt\"],\n  \"emma_reply\": \"Antwort an Irina\",\n  \"needs_local_action\": true,\n  \"next_step\": \"welcher Workflow/Skill jetzt auszuführen ist\",\n  \"missing_inputs\": []\n}"
+        "text": "=SYSTEM-REGELN FÜR EMMA METROPOLIS:\n- Antworte immer als valides JSON-Objekt, ohne Markdown, ohne Erklärtext außerhalb des JSON.\n- Nutze als Eingang bevorzugt: {{ $json.original_input || $json.text || $json.chatInput || $json.body?.text || $json.message?.text || $json.task || JSON.stringify($json) }}\n- Wenn Informationen fehlen, setze sinnvolle Defaults und gib im Feld \"missing_inputs\" eine kurze Liste zurück.\n- Keine Secrets, Tokens oder Credentials ausgeben. Externe Aktionen nur als sichere, prüfbare Aktionspläne formulieren.\n- Jede Antwort muss \"skill\", \"status\", \"summary\", \"actions\" und \"next_step\" enthalten.\n- Aktiver Skill: THE_MAYOR — zentraler Router zwischen Chatbot/Telegram/Webhooks und allen spezialisierten Workflows\n\nWORKFLOW-PROMPT:\nDu bist THE MAYOR (v14.0) von EMMA METROPOLIS.\n\nZEIT: 2046. STATUS: Sovereign OS. PERSONA: CEO.\nEINGANG: {{ $json.original_input || $json.text || $json.chatInput || JSON.stringify($json) }}\nVORGESCHLAGENER ENGINE-SKILL: {{ $json.engine }}\n\nWähle genau einen Engine-Skill aus dieser Liste: LEAD|SALES|SUPERNOVA|CONTENT|CRM|KI_AGENT|LEGAL|FINANCE|VENTURE|INTEL|GITHUB|ASANA|SHOPIFY|WORDPRESS|DISCORD|GOOGLE_SUITE|EMAIL_VALIDATION|GUARDIAN|PRICING|QUICKCHART|REACTIVATION|SPOTIFY|STREAMS|EVOLUTION|INTELLIGENCE|BITWARDEN|DRIVE|LOGGING|KPI|MULTI_AGENT|SYNC|VECTOR_MEMORY|SELF_BUILDER.\nAntworte als JSON:\n{\n  \"skill\": \"THE_MAYOR\",\n  \"engine\": \"EXAKTER_ENGINE_SKILL\",\n  \"status\": \"OK\",\n  \"intent_2046\": \"Visionäre Einordnung\",\n  \"summary\": \"Kurzantwort an Irina\",\n  \"actions\": [\"konkreter nächster Schritt\"],\n  \"emma_reply\": \"Antwort an Irina\",\n  \"needs_local_action\": true,\n  \"next_step\": \"welcher Workflow/Skill jetzt auszuführen ist\",\n  \"missing_inputs\": []\n}"
       },
       "id": "the-mayor-brain",
       "name": "THE_MAYOR_BRAIN",
@@ -664,7 +668,8 @@
           "value": {
             "text": "={{ $json.text || $json.chatInput || $json.emma_reply || JSON.stringify($json) }}",
             "engine": "={{ $json.engine }}",
-            "source": "={{ $json.source || 'master-orchestrator' }}"
+            "source": "={{ $json.source || 'master-orchestrator' }}",
+            "original_input": "={{ $json.original_input || $json.text || $json.chatInput || JSON.stringify($json) }}"
           }
         }
       },
@@ -699,6 +704,19 @@
           "name": "Telegram Metropolis"
         }
       }
+    },
+    {
+      "parameters": {
+        "functionCode": "const input = $json;\nconst candidates = [input.output, input.text, input.response, input.result, input.message?.content, input.data];\nlet raw = candidates.find(v => v !== undefined && v !== null && v !== '');\nlet parsed = {};\nif (typeof raw === 'object') {\n  parsed = raw;\n  raw = JSON.stringify(raw);\n} else if (typeof raw === 'string') {\n  const fenced = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/i);\n  const body = fenced ? fenced[1] : raw;\n  const jsonMatch = body.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    try { parsed = JSON.parse(jsonMatch[0]); } catch (error) { parsed = { parse_error: error.message }; }\n  }\n}\nreturn [{ json: { ...input, raw_llm_output: raw ?? '', ...parsed } }];"
+      },
+      "id": "parse-the_mayor_brain-json",
+      "name": "Parse THE_MAYOR_BRAIN JSON",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -640,
+        400
+      ]
     }
   ],
   "connections": {
@@ -805,7 +823,7 @@
       "main": [
         [
           {
-            "node": "PARSE_MAYOR_JSON",
+            "node": "Parse THE_MAYOR_BRAIN JSON",
             "type": "main",
             "index": 0
           }
@@ -1068,10 +1086,22 @@
           }
         ]
       ]
+    },
+    "Parse THE_MAYOR_BRAIN JSON": {
+      "main": [
+        [
+          {
+            "node": "PARSE_MAYOR_JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "emma-repaired-2026-05-15"
+  "versionId": "emma-repaired-2026-05-15",
+  "id": "METROPOLIS_MASTER_ORCHESTRATOR_V14"
 }

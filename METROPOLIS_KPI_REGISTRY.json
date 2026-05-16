@@ -47,7 +47,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "=INSERT INTO kpi_metrics (metric_name, value, unit) VALUES ('{{$json.metric}}', '{{$json.value}}', '{{$json.unit || 'count'}}');",
+        "query": "=CREATE TABLE IF NOT EXISTS kpi_metrics (metric_name TEXT, value TEXT, unit TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP); INSERT INTO kpi_metrics (metric_name, value, unit) VALUES ('{{$json.metric}}', '{{$json.value}}', '{{$json.unit || 'count'}}');",
         "options": {}
       },
       "id": "update-kpi",
@@ -63,7 +63,11 @@
           "id": "local_sqlite_metropolis",
           "name": "Metropolis SQLite"
         }
-      }
+      },
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
     }
   ],
   "connections": {
@@ -93,5 +97,6 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "emma-repaired-2026-05-15"
+  "versionId": "emma-repaired-2026-05-15",
+  "id": "METROPOLIS_KPI_REGISTRY"
 }

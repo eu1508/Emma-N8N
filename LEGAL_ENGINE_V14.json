@@ -69,7 +69,7 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=SYSTEM-REGELN FÜR EMMA METROPOLIS:\n- Antworte immer als valides JSON-Objekt, ohne Markdown, ohne Erklärtext außerhalb des JSON.\n- Nutze als Eingang bevorzugt: {{ $json.text || $json.chatInput || $json.body?.text || $json.message?.text || $json.task || JSON.stringify($json) }}\n- Wenn Informationen fehlen, setze sinnvolle Defaults und gib im Feld \"missing_inputs\" eine kurze Liste zurück.\n- Keine Secrets, Tokens oder Credentials ausgeben. Externe Aktionen nur als sichere, prüfbare Aktionspläne formulieren.\n- Jede Antwort muss \"skill\", \"status\", \"summary\", \"actions\" und \"next_step\" enthalten.\n- Aktiver Skill: LEGAL — Recht: Risiken und Vertrags-/Compliance-Punkte als Orientierung strukturieren; keine Rechtsberatung vortäuschen.\n\nWORKFLOW-PROMPT:\nDu bist der JURISTISCHE KERNTEX (v14.0) von EMMA METROPOLIS.\n\nDEINE ROLLEN: Anwalt, Richter, Notar.\nDEIN FOKUS: Präzision, Gesetze, Verträge, Haftung, Firmenrecht.\n\nAUFGABE: Analysiere die Anfrage von Irina auf rechtliche Implikationen. Nutze deutsche Rechtsprechung (BGB, HGB) als Basis.\n\nInput: {{$json.text}}\n\nAntworte als rechtliches Gutachten (JSON):\n{\n  \"legal_status\": \"Einschätzung der Lage\",\n  \"risks\": [\"Risiko 1\", \"Risiko 2\"],\n  \"recommendation\": \"Was sollte Irina tun?\",\n  \"statutes\": [\"Paragraphen/Gesetze\"],\n  \"sovereignty_score\": 100\n}"
+        "text": "=SYSTEM-REGELN FÜR EMMA METROPOLIS:\n- Antworte immer als valides JSON-Objekt, ohne Markdown, ohne Erklärtext außerhalb des JSON.\n- Nutze als Eingang bevorzugt: {{ $json.original_input || $json.text || $json.chatInput || $json.body?.text || $json.message?.text || $json.task || JSON.stringify($json) }}\n- Wenn Informationen fehlen, setze sinnvolle Defaults und gib im Feld \"missing_inputs\" eine kurze Liste zurück.\n- Keine Secrets, Tokens oder Credentials ausgeben. Externe Aktionen nur als sichere, prüfbare Aktionspläne formulieren.\n- Jede Antwort muss \"skill\", \"status\", \"summary\", \"actions\" und \"next_step\" enthalten.\n- Aktiver Skill: LEGAL — Recht: Risiken und Vertrags-/Compliance-Punkte als Orientierung strukturieren; keine Rechtsberatung vortäuschen.\n\nWORKFLOW-PROMPT:\nDu bist der JURISTISCHE KERNTEX (v14.0) von EMMA METROPOLIS.\n\nDEINE ROLLEN: Anwalt, Richter, Notar.\nDEIN FOKUS: Präzision, Gesetze, Verträge, Haftung, Firmenrecht.\n\nAUFGABE: Analysiere die Anfrage von Irina auf rechtliche Implikationen. Nutze deutsche Rechtsprechung (BGB, HGB) als Basis.\n\nInput: {{$json.original_input || $json.text || $json.raw_llm_output}}\n\nAntworte als rechtliches Gutachten (JSON):\n{\n  \"legal_status\": \"Einschätzung der Lage\",\n  \"risks\": [\"Risiko 1\", \"Risiko 2\"],\n  \"recommendation\": \"Was sollte Irina tun?\",\n  \"statutes\": [\"Paragraphen/Gesetze\"],\n  \"sovereignty_score\": 100\n}"
       },
       "id": "legal-logic",
       "name": "Legal Logic",
@@ -83,7 +83,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "=INSERT INTO interaction_memory (session_id, user_id, channel, input) VALUES ('LEGAL_LOG', 'SYSTEM', 'INTERNAL', 'Legal analysis for: ' || '{{$json.legal_status}}');",
+        "query": "=CREATE TABLE IF NOT EXISTS interaction_memory (session_id TEXT, user_id TEXT, channel TEXT, input TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP); INSERT INTO interaction_memory (session_id, user_id, channel, input) VALUES ('LEGAL_LOG', 'SYSTEM', 'INTERNAL', 'Legal analysis for: ' || '{{$json.legal_status}}');",
         "options": {}
       },
       "id": "save-legal",
@@ -99,7 +99,24 @@
           "id": "local_sqlite_metropolis",
           "name": "Metropolis SQLite"
         }
-      }
+      },
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "parameters": {
+        "functionCode": "const input = $json;\nconst candidates = [input.output, input.text, input.response, input.result, input.message?.content, input.data];\nlet raw = candidates.find(v => v !== undefined && v !== null && v !== '');\nlet parsed = {};\nif (typeof raw === 'object') {\n  parsed = raw;\n  raw = JSON.stringify(raw);\n} else if (typeof raw === 'string') {\n  const fenced = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/i);\n  const body = fenced ? fenced[1] : raw;\n  const jsonMatch = body.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    try { parsed = JSON.parse(jsonMatch[0]); } catch (error) { parsed = { parse_error: error.message }; }\n  }\n}\nreturn [{ json: { ...input, raw_llm_output: raw ?? '', ...parsed } }];"
+      },
+      "id": "parse-legal-logic-json",
+      "name": "Parse Legal Logic JSON",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        670,
+        400
+      ]
     }
   ],
   "connections": {
@@ -129,7 +146,7 @@
       "main": [
         [
           {
-            "node": "Save to SQLite",
+            "node": "Parse Legal Logic JSON",
             "type": "main",
             "index": 0
           }
@@ -146,10 +163,22 @@
           }
         ]
       ]
+    },
+    "Parse Legal Logic JSON": {
+      "main": [
+        [
+          {
+            "node": "Save to SQLite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "emma-repaired-2026-05-15"
+  "versionId": "emma-repaired-2026-05-15",
+  "id": "LEGAL_ENGINE_V14"
 }

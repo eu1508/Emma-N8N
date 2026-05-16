@@ -47,7 +47,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "=INSERT INTO global_registry (key, value, context) VALUES ('METROPOLIS_STATUS', 'ACTIVE', 'Sync via Bridge');",
+        "query": "=CREATE TABLE IF NOT EXISTS global_registry (key TEXT PRIMARY KEY, value TEXT, context TEXT, updated_at TEXT DEFAULT CURRENT_TIMESTAMP); INSERT OR REPLACE INTO global_registry (key, value, context) VALUES ('METROPOLIS_STATUS', 'ACTIVE', 'Sync via Bridge');",
         "options": {}
       },
       "id": "update-registry",
@@ -63,7 +63,11 @@
           "id": "local_sqlite_metropolis",
           "name": "Metropolis SQLite"
         }
-      }
+      },
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
     }
   ],
   "connections": {
@@ -93,5 +97,6 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "emma-repaired-2026-05-15"
+  "versionId": "emma-repaired-2026-05-15",
+  "id": "METROPOLIS_V14_SYNC_BRIDGE"
 }

@@ -47,7 +47,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "=INSERT INTO global_registry (key, value, context) VALUES ('CRM_LEAD_' || '{{$json.name || Date.now()}}', '{{$json.email}}', 'Lead via CRM Engine');",
+        "query": "=CREATE TABLE IF NOT EXISTS global_registry (key TEXT PRIMARY KEY, value TEXT, context TEXT, updated_at TEXT DEFAULT CURRENT_TIMESTAMP); INSERT OR REPLACE INTO global_registry (key, value, context) VALUES ('CRM_LEAD_' || '{{$json.name || Date.now()}}', '{{$json.email}}', 'Lead via CRM Engine');",
         "options": {}
       },
       "id": "save-to-sqlite",
@@ -63,7 +63,11 @@
           "id": "local_sqlite_metropolis",
           "name": "Metropolis SQLite"
         }
-      }
+      },
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
     }
   ],
   "connections": {
@@ -93,5 +97,6 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "emma-repaired-2026-05-15"
+  "versionId": "emma-repaired-2026-05-15",
+  "id": "CRM_ENGINE_V700"
 }

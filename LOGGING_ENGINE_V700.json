@@ -47,7 +47,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "=INSERT INTO engine_registry (engine_name, status, version) VALUES ('GENERAL_LOG', 'INFO', 'v14.0');",
+        "query": "=CREATE TABLE IF NOT EXISTS engine_registry (engine_name TEXT PRIMARY KEY, status TEXT, version TEXT, updated_at TEXT DEFAULT CURRENT_TIMESTAMP); INSERT OR REPLACE INTO engine_registry (engine_name, status, version) VALUES ('GENERAL_LOG', 'INFO', 'v14.0');",
         "options": {}
       },
       "id": "log-to-sqlite",
@@ -63,7 +63,11 @@
           "id": "local_sqlite_metropolis",
           "name": "Metropolis SQLite"
         }
-      }
+      },
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
     }
   ],
   "connections": {
@@ -93,5 +97,6 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "emma-repaired-2026-05-15"
+  "versionId": "emma-repaired-2026-05-15",
+  "id": "LOGGING_ENGINE_V700"
 }

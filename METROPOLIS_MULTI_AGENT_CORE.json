@@ -69,7 +69,7 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=SYSTEM-REGELN FÜR EMMA METROPOLIS:\n- Antworte immer als valides JSON-Objekt, ohne Markdown, ohne Erklärtext außerhalb des JSON.\n- Nutze als Eingang bevorzugt: {{ $json.text || $json.chatInput || $json.body?.text || $json.message?.text || $json.task || JSON.stringify($json) }}\n- Wenn Informationen fehlen, setze sinnvolle Defaults und gib im Feld \"missing_inputs\" eine kurze Liste zurück.\n- Keine Secrets, Tokens oder Credentials ausgeben. Externe Aktionen nur als sichere, prüfbare Aktionspläne formulieren.\n- Jede Antwort muss \"skill\", \"status\", \"summary\", \"actions\" und \"next_step\" enthalten.\n- Aktiver Skill: MULTI_AGENT — Multi-Agent-Analyse: Strategie, Risiko und Chance sequenziell prüfen.\n\nWORKFLOW-PROMPT:\nDu bist der STRATEGIE-AGENT (Metropolis v14.0).\nAnalysiere die Anfrage auf langfristigen Erfolg und CEO-Alignment.\n\nInput: {{$json.text}}\n\nAntworte kurz und präzise."
+        "text": "=SYSTEM-REGELN FÜR EMMA METROPOLIS:\n- Antworte immer als valides JSON-Objekt, ohne Markdown, ohne Erklärtext außerhalb des JSON.\n- Nutze als Eingang bevorzugt: {{ $json.original_input || $json.text || $json.chatInput || $json.body?.text || $json.message?.text || $json.task || JSON.stringify($json) }}\n- Wenn Informationen fehlen, setze sinnvolle Defaults und gib im Feld \"missing_inputs\" eine kurze Liste zurück.\n- Keine Secrets, Tokens oder Credentials ausgeben. Externe Aktionen nur als sichere, prüfbare Aktionspläne formulieren.\n- Jede Antwort muss \"skill\", \"status\", \"summary\", \"actions\" und \"next_step\" enthalten.\n- Aktiver Skill: MULTI_AGENT — Multi-Agent-Analyse: Strategie, Risiko und Chance sequenziell prüfen.\n\nWORKFLOW-PROMPT:\nDu bist der STRATEGIE-AGENT (Metropolis v14.0).\nAnalysiere die Anfrage auf langfristigen Erfolg und CEO-Alignment.\n\nInput: {{$json.original_input || $json.text || $json.raw_llm_output}}\n\nAntworte kurz und präzise."
       },
       "id": "strategy-agent",
       "name": "STRATEGY_AGENT",
@@ -105,7 +105,7 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=SYSTEM-REGELN FÜR EMMA METROPOLIS:\n- Antworte immer als valides JSON-Objekt, ohne Markdown, ohne Erklärtext außerhalb des JSON.\n- Nutze als Eingang bevorzugt: {{ $json.text || $json.chatInput || $json.body?.text || $json.message?.text || $json.task || JSON.stringify($json) }}\n- Wenn Informationen fehlen, setze sinnvolle Defaults und gib im Feld \"missing_inputs\" eine kurze Liste zurück.\n- Keine Secrets, Tokens oder Credentials ausgeben. Externe Aktionen nur als sichere, prüfbare Aktionspläne formulieren.\n- Jede Antwort muss \"skill\", \"status\", \"summary\", \"actions\" und \"next_step\" enthalten.\n- Aktiver Skill: MULTI_AGENT — Multi-Agent-Analyse: Strategie, Risiko und Chance sequenziell prüfen.\n\nWORKFLOW-PROMPT:\nDu bist der RISIKO-AGENT (Metropolis v14.0).\nAnalysiere die Anfrage auf Gefahren, Sicherheitslücken und ethische Risiken.\n\nInput: {{$json.text}}\n\nAntworte kurz und präzise."
+        "text": "=SYSTEM-REGELN FÜR EMMA METROPOLIS:\n- Antworte immer als valides JSON-Objekt, ohne Markdown, ohne Erklärtext außerhalb des JSON.\n- Nutze als Eingang bevorzugt: {{ $json.original_input || $json.text || $json.chatInput || $json.body?.text || $json.message?.text || $json.task || JSON.stringify($json) }}\n- Wenn Informationen fehlen, setze sinnvolle Defaults und gib im Feld \"missing_inputs\" eine kurze Liste zurück.\n- Keine Secrets, Tokens oder Credentials ausgeben. Externe Aktionen nur als sichere, prüfbare Aktionspläne formulieren.\n- Jede Antwort muss \"skill\", \"status\", \"summary\", \"actions\" und \"next_step\" enthalten.\n- Aktiver Skill: MULTI_AGENT — Multi-Agent-Analyse: Strategie, Risiko und Chance sequenziell prüfen.\n\nWORKFLOW-PROMPT:\nDu bist der RISIKO-AGENT (Metropolis v14.0).\nAnalysiere die Anfrage auf Gefahren, Sicherheitslücken und ethische Risiken.\n\nInput: {{$json.original_input || $json.text || $json.raw_llm_output}}\n\nAntworte kurz und präzise."
       },
       "id": "risk-agent",
       "name": "RISK_AGENT",
@@ -141,7 +141,7 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=SYSTEM-REGELN FÜR EMMA METROPOLIS:\n- Antworte immer als valides JSON-Objekt, ohne Markdown, ohne Erklärtext außerhalb des JSON.\n- Nutze als Eingang bevorzugt: {{ $json.text || $json.chatInput || $json.body?.text || $json.message?.text || $json.task || JSON.stringify($json) }}\n- Wenn Informationen fehlen, setze sinnvolle Defaults und gib im Feld \"missing_inputs\" eine kurze Liste zurück.\n- Keine Secrets, Tokens oder Credentials ausgeben. Externe Aktionen nur als sichere, prüfbare Aktionspläne formulieren.\n- Jede Antwort muss \"skill\", \"status\", \"summary\", \"actions\" und \"next_step\" enthalten.\n- Aktiver Skill: MULTI_AGENT — Multi-Agent-Analyse: Strategie, Risiko und Chance sequenziell prüfen.\n\nWORKFLOW-PROMPT:\nDu bist der OPPORTUNITY-AGENT (Metropolis v14.0).\nAnalysiere die Anfrage auf Wachstumschancen und ROI-Potenzial.\n\nInput: {{$json.text}}\n\nAntworte kurz und präzise."
+        "text": "=SYSTEM-REGELN FÜR EMMA METROPOLIS:\n- Antworte immer als valides JSON-Objekt, ohne Markdown, ohne Erklärtext außerhalb des JSON.\n- Nutze als Eingang bevorzugt: {{ $json.original_input || $json.text || $json.chatInput || $json.body?.text || $json.message?.text || $json.task || JSON.stringify($json) }}\n- Wenn Informationen fehlen, setze sinnvolle Defaults und gib im Feld \"missing_inputs\" eine kurze Liste zurück.\n- Keine Secrets, Tokens oder Credentials ausgeben. Externe Aktionen nur als sichere, prüfbare Aktionspläne formulieren.\n- Jede Antwort muss \"skill\", \"status\", \"summary\", \"actions\" und \"next_step\" enthalten.\n- Aktiver Skill: MULTI_AGENT — Multi-Agent-Analyse: Strategie, Risiko und Chance sequenziell prüfen.\n\nWORKFLOW-PROMPT:\nDu bist der OPPORTUNITY-AGENT (Metropolis v14.0).\nAnalysiere die Anfrage auf Wachstumschancen und ROI-Potenzial.\n\nInput: {{$json.original_input || $json.text || $json.raw_llm_output}}\n\nAntworte kurz und präzise."
       },
       "id": "opportunity-agent",
       "name": "OPPORTUNITY_AGENT",
@@ -149,6 +149,45 @@
       "typeVersion": 1.4,
       "position": [
         600,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const input = $json;\nconst candidates = [input.output, input.text, input.response, input.result, input.message?.content, input.data];\nlet raw = candidates.find(v => v !== undefined && v !== null && v !== '');\nlet parsed = {};\nif (typeof raw === 'object') {\n  parsed = raw;\n  raw = JSON.stringify(raw);\n} else if (typeof raw === 'string') {\n  const fenced = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/i);\n  const body = fenced ? fenced[1] : raw;\n  const jsonMatch = body.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    try { parsed = JSON.parse(jsonMatch[0]); } catch (error) { parsed = { parse_error: error.message }; }\n  }\n}\nreturn [{ json: { ...input, raw_llm_output: raw ?? '', ...parsed } }];"
+      },
+      "id": "parse-strategy_agent-json",
+      "name": "Parse STRATEGY_AGENT JSON",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        820,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const input = $json;\nconst candidates = [input.output, input.text, input.response, input.result, input.message?.content, input.data];\nlet raw = candidates.find(v => v !== undefined && v !== null && v !== '');\nlet parsed = {};\nif (typeof raw === 'object') {\n  parsed = raw;\n  raw = JSON.stringify(raw);\n} else if (typeof raw === 'string') {\n  const fenced = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/i);\n  const body = fenced ? fenced[1] : raw;\n  const jsonMatch = body.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    try { parsed = JSON.parse(jsonMatch[0]); } catch (error) { parsed = { parse_error: error.message }; }\n  }\n}\nreturn [{ json: { ...input, raw_llm_output: raw ?? '', ...parsed } }];"
+      },
+      "id": "parse-risk_agent-json",
+      "name": "Parse RISK_AGENT JSON",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        820,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const input = $json;\nconst candidates = [input.output, input.text, input.response, input.result, input.message?.content, input.data];\nlet raw = candidates.find(v => v !== undefined && v !== null && v !== '');\nlet parsed = {};\nif (typeof raw === 'object') {\n  parsed = raw;\n  raw = JSON.stringify(raw);\n} else if (typeof raw === 'string') {\n  const fenced = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/i);\n  const body = fenced ? fenced[1] : raw;\n  const jsonMatch = body.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    try { parsed = JSON.parse(jsonMatch[0]); } catch (error) { parsed = { parse_error: error.message }; }\n  }\n}\nreturn [{ json: { ...input, raw_llm_output: raw ?? '', ...parsed } }];"
+      },
+      "id": "parse-opportunity_agent-json",
+      "name": "Parse OPPORTUNITY_AGENT JSON",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        820,
         600
       ]
     }
@@ -202,7 +241,7 @@
       "main": [
         [
           {
-            "node": "RISK_AGENT",
+            "node": "Parse STRATEGY_AGENT JSON",
             "type": "main",
             "index": 0
           }
@@ -213,7 +252,7 @@
       "main": [
         [
           {
-            "node": "OPPORTUNITY_AGENT",
+            "node": "Parse RISK_AGENT JSON",
             "type": "main",
             "index": 0
           }
@@ -230,10 +269,44 @@
           }
         ]
       ]
+    },
+    "Parse STRATEGY_AGENT JSON": {
+      "main": [
+        [
+          {
+            "node": "RISK_AGENT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse RISK_AGENT JSON": {
+      "main": [
+        [
+          {
+            "node": "OPPORTUNITY_AGENT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OPPORTUNITY_AGENT": {
+      "main": [
+        [
+          {
+            "node": "Parse OPPORTUNITY_AGENT JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "emma-repaired-2026-05-15"
+  "versionId": "emma-repaired-2026-05-15",
+  "id": "METROPOLIS_MULTI_AGENT_CORE"
 }

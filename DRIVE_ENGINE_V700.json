@@ -31,18 +31,16 @@
     },
     {
       "parameters": {
-        "notice": "Zentrale Dateisystem-Steuerung für Drive."
+        "functionCode": "const text = $json.original_input || $json.text || $json.chatInput || JSON.stringify($json);\nreturn [{ json: {\n  skill: 'DRIVE',\n  status: 'OK',\n  summary: 'Drive/file request converted into a structured action plan.',\n  requested_input: text,\n  actions: [\n    'Determine target folder, file type, naming convention, and permissions.',\n    'Create or update the file only after Drive credentials and target IDs are configured.',\n    'Return share/access instructions without exposing private file contents unless explicitly requested.'\n  ],\n  next_step: 'Connect Google Drive nodes/credentials for write actions or keep this as a planning workflow.',\n  missing_inputs: text ? [] : ['text']\n}}];"
       },
       "id": "info",
       "name": "Drive Commander",
-      "type": "n8n-nodes-base.noOp",
+      "type": "n8n-nodes-base.function",
       "typeVersion": 1,
       "position": [
         460,
         300
-      ],
-      "notesInFlow": true,
-      "notes": "Skill DRIVE: Drive/Datei-Organisation: Ordner, Dokumente und Ablagepläne eindeutig strukturieren. Dieser Platzhalter ist absichtlich safe-by-default und kann später mit Service-spezifischen Credentials erweitert werden."
+      ]
     }
   ],
   "connections": {
@@ -61,5 +59,6 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "emma-repaired-2026-05-15"
+  "versionId": "emma-repaired-2026-05-15",
+  "id": "DRIVE_ENGINE_V700"
 }

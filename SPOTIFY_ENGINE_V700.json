@@ -32,7 +32,7 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=SYSTEM-REGELN FÜR EMMA METROPOLIS:\n- Antworte immer als valides JSON-Objekt, ohne Markdown, ohne Erklärtext außerhalb des JSON.\n- Nutze als Eingang bevorzugt: {{ $json.text || $json.chatInput || $json.body?.text || $json.message?.text || $json.task || JSON.stringify($json) }}\n- Wenn Informationen fehlen, setze sinnvolle Defaults und gib im Feld \"missing_inputs\" eine kurze Liste zurück.\n- Keine Secrets, Tokens oder Credentials ausgeben. Externe Aktionen nur als sichere, prüfbare Aktionspläne formulieren.\n- Jede Antwort muss \"skill\", \"status\", \"summary\", \"actions\" und \"next_step\" enthalten.\n- Aktiver Skill: SPOTIFY — Spotify/Musik: Trends, Playlists, Release- und Wachstumstaktiken analysieren.\n\nWORKFLOW-PROMPT:\nAnalysiere Musik-Trends und Playlists für: {{ $json.text }}"
+        "text": "=SYSTEM-REGELN FÜR EMMA METROPOLIS:\n- Antworte immer als valides JSON-Objekt, ohne Markdown, ohne Erklärtext außerhalb des JSON.\n- Nutze als Eingang bevorzugt: {{ $json.original_input || $json.text || $json.chatInput || $json.body?.text || $json.message?.text || $json.task || JSON.stringify($json) }}\n- Wenn Informationen fehlen, setze sinnvolle Defaults und gib im Feld \"missing_inputs\" eine kurze Liste zurück.\n- Keine Secrets, Tokens oder Credentials ausgeben. Externe Aktionen nur als sichere, prüfbare Aktionspläne formulieren.\n- Jede Antwort muss \"skill\", \"status\", \"summary\", \"actions\" und \"next_step\" enthalten.\n- Aktiver Skill: SPOTIFY — Spotify/Musik: Trends, Playlists, Release- und Wachstumstaktiken analysieren.\n\nWORKFLOW-PROMPT:\nAnalysiere Musik-Trends und Playlists für: {{ $json.original_input || $json.text || $json.raw_llm_output }}"
       },
       "id": "gemini",
       "name": "Spotify AI",
@@ -64,6 +64,19 @@
           "name": "Google Gemini API"
         }
       }
+    },
+    {
+      "parameters": {
+        "functionCode": "const input = $json;\nconst candidates = [input.output, input.text, input.response, input.result, input.message?.content, input.data];\nlet raw = candidates.find(v => v !== undefined && v !== null && v !== '');\nlet parsed = {};\nif (typeof raw === 'object') {\n  parsed = raw;\n  raw = JSON.stringify(raw);\n} else if (typeof raw === 'string') {\n  const fenced = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/i);\n  const body = fenced ? fenced[1] : raw;\n  const jsonMatch = body.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    try { parsed = JSON.parse(jsonMatch[0]); } catch (error) { parsed = { parse_error: error.message }; }\n  }\n}\nreturn [{ json: { ...input, raw_llm_output: raw ?? '', ...parsed } }];"
+      },
+      "id": "parse-spotify-ai-json",
+      "name": "Parse Spotify AI JSON",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ]
     }
   ],
   "connections": {
@@ -88,10 +101,22 @@
           }
         ]
       ]
+    },
+    "Spotify AI": {
+      "main": [
+        [
+          {
+            "node": "Parse Spotify AI JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "emma-repaired-2026-05-15"
+  "versionId": "emma-repaired-2026-05-15",
+  "id": "SPOTIFY_ENGINE_V700"
 }

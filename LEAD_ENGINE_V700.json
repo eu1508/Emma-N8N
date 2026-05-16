@@ -54,7 +54,7 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=SYSTEM-REGELN FÜR EMMA METROPOLIS:\n- Antworte immer als valides JSON-Objekt, ohne Markdown, ohne Erklärtext außerhalb des JSON.\n- Nutze als Eingang bevorzugt: {{ $json.text || $json.chatInput || $json.body?.text || $json.message?.text || $json.task || JSON.stringify($json) }}\n- Wenn Informationen fehlen, setze sinnvolle Defaults und gib im Feld \"missing_inputs\" eine kurze Liste zurück.\n- Keine Secrets, Tokens oder Credentials ausgeben. Externe Aktionen nur als sichere, prüfbare Aktionspläne formulieren.\n- Jede Antwort muss \"skill\", \"status\", \"summary\", \"actions\" und \"next_step\" enthalten.\n- Aktiver Skill: LEAD — Lead-Generierung: Zielgruppe, Qualifizierung, Outreach und Follow-up planen.\n\nWORKFLOW-PROMPT:\nDu bist EMMA's Lead-Generator. Deine Aufgabe ist es, aus dem Text potenzielle Leads oder Kontakte zu extrahieren.\n\nText: {{ $json.text }}\n\nAntworte als JSON:\n{\n  \"contacts\": [\n    {\n      \"name\": \"Name\",\n      \"email\": \"E-Mail\",\n      \"phone\": \"Telefon\",\n      \"company\": \"Firma\",\n      \"interest\": \"Interesse\",\n      \"score\": 1-10\n    }\n  ],\n  \"strategic_advice\": \"Wie sollen wir vorgehen?\"\n}"
+        "text": "=SYSTEM-REGELN FÜR EMMA METROPOLIS:\n- Antworte immer als valides JSON-Objekt, ohne Markdown, ohne Erklärtext außerhalb des JSON.\n- Nutze als Eingang bevorzugt: {{ $json.original_input || $json.text || $json.chatInput || $json.body?.text || $json.message?.text || $json.task || JSON.stringify($json) }}\n- Wenn Informationen fehlen, setze sinnvolle Defaults und gib im Feld \"missing_inputs\" eine kurze Liste zurück.\n- Keine Secrets, Tokens oder Credentials ausgeben. Externe Aktionen nur als sichere, prüfbare Aktionspläne formulieren.\n- Jede Antwort muss \"skill\", \"status\", \"summary\", \"actions\" und \"next_step\" enthalten.\n- Aktiver Skill: LEAD — Lead-Generierung: Zielgruppe, Qualifizierung, Outreach und Follow-up planen.\n\nWORKFLOW-PROMPT:\nDu bist EMMA's Lead-Generator. Deine Aufgabe ist es, aus dem Text potenzielle Leads oder Kontakte zu extrahieren.\n\nText: {{ $json.original_input || $json.text || $json.raw_llm_output }}\n\nAntworte als JSON:\n{\n  \"contacts\": [\n    {\n      \"name\": \"Name\",\n      \"email\": \"E-Mail\",\n      \"phone\": \"Telefon\",\n      \"company\": \"Firma\",\n      \"interest\": \"Interesse\",\n      \"score\": 1-10\n    }\n  ],\n  \"strategic_advice\": \"Wie sollen wir vorgehen?\"\n}"
       },
       "id": "analyze-leads",
       "name": "Analyze Leads",
@@ -84,7 +84,24 @@
           "id": "q2sycFRoxqP47oRY",
           "name": "Postgres account"
         }
-      }
+      },
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "parameters": {
+        "functionCode": "const input = $json;\nconst candidates = [input.output, input.text, input.response, input.result, input.message?.content, input.data];\nlet raw = candidates.find(v => v !== undefined && v !== null && v !== '');\nlet parsed = {};\nif (typeof raw === 'object') {\n  parsed = raw;\n  raw = JSON.stringify(raw);\n} else if (typeof raw === 'string') {\n  const fenced = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/i);\n  const body = fenced ? fenced[1] : raw;\n  const jsonMatch = body.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    try { parsed = JSON.parse(jsonMatch[0]); } catch (error) { parsed = { parse_error: error.message }; }\n  }\n}\nreturn [{ json: { ...input, raw_llm_output: raw ?? '', ...parsed } }];"
+      },
+      "id": "parse-analyze-leads-json",
+      "name": "Parse Analyze Leads JSON",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ]
     }
   ],
   "connections": {
@@ -114,6 +131,17 @@
       "main": [
         [
           {
+            "node": "Parse Analyze Leads JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Analyze Leads JSON": {
+      "main": [
+        [
+          {
             "node": "Save Leads to CRM",
             "type": "main",
             "index": 0
@@ -125,5 +153,6 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "emma-repaired-2026-05-15"
+  "versionId": "emma-repaired-2026-05-15",
+  "id": "LEAD_ENGINE_V700"
 }
