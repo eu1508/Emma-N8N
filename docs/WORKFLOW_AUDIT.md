@@ -77,6 +77,10 @@ Das Tool `tools/validate_n8n_workflows.py` prüft:
 | `EVOLUTION_ENGINE_V700` | Selbstoptimierung | JSON-Vertrag, Parser |
 | `INTELLIGENCE_ENGINE_V700` | Strategische Analyse | JSON-Vertrag, Parser |
 
+## Automatische n8n-Einbindung
+
+Für echte Einbindung in eine laufende n8n-Instanz gibt es jetzt `tools/deploy_n8n_bundle.py`. Die Schritt-für-Schritt-Anleitung steht in `docs/N8N_IMPORT_RUNBOOK.md`. Das Script benötigt `N8N_BASE_URL` und `N8N_API_KEY`, erstellt/aktualisiert die Workflows und patcht den Master-Orchestrator auf die echten n8n-Workflow-IDs.
+
 ## Betriebs-Checkliste nach Import
 
 1. Alle Credentials in n8n öffnen und testen.

@@ -135,6 +135,16 @@ if skills_path.exists():
         if expected_skill not in skills_text:
             err("skills.sh", f"missing skill registry entry {expected_skill!r}")
 
+# Deployment helper sanity: the bundle should include an operator-facing way to bind into n8n.
+deploy_script = Path("tools/deploy_n8n_bundle.py")
+if not deploy_script.exists():
+    err("tools/deploy_n8n_bundle.py", "missing n8n deployment helper")
+else:
+    deploy_text = deploy_script.read_text(encoding="utf-8")
+    for required in ["N8N_BASE_URL", "N8N_API_KEY", "patch_master_mapping", "--apply"]:
+        if required not in deploy_text:
+            err("tools/deploy_n8n_bundle.py", f"deployment helper missing {required!r}")
+
 if ERRORS:
     print("Validation failed:", file=sys.stderr)
     for item in ERRORS:
