@@ -26,6 +26,12 @@ Ohne diese Werte hätte ein automatischer Import keinen autorisierten Zielserver
 Dry-run:
 
 ```bash
+./install_in_n8n.sh check
+```
+
+Oder direkt:
+
+```bash
 python3 tools/deploy_n8n_bundle.py
 ```
 
@@ -34,7 +40,7 @@ Live-Bindung mit `.env.n8n`:
 ```bash
 cp .env.n8n.example .env.n8n
 # .env.n8n bearbeiten und echten API-Key eintragen
-python3 tools/deploy_n8n_bundle.py --apply
+./install_in_n8n.sh deploy
 ```
 
 Alternative ohne Datei:
@@ -48,7 +54,7 @@ python3 tools/deploy_n8n_bundle.py --apply
 Optional mit Aktivierung:
 
 ```bash
-python3 tools/deploy_n8n_bundle.py --apply --activate
+./install_in_n8n.sh activate
 ```
 
 ## Was das Script macht

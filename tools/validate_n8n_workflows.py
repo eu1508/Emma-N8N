@@ -156,6 +156,16 @@ if not Path("tools/scan_secrets.py").exists():
 if not Path("docs/SECURITY_INCIDENT_RESPONSE.md").exists():
     err("docs/SECURITY_INCIDENT_RESPONSE.md", "missing leaked-secret response runbook")
 
+# Installer wrapper sanity: give operators a one-command entry point.
+installer = Path("install_in_n8n.sh")
+if not installer.exists():
+    err("install_in_n8n.sh", "missing one-command n8n installer")
+else:
+    installer_text = installer.read_text(encoding="utf-8")
+    for required in ["check", "deploy", "activate", "tools/scan_secrets.py", "tools/deploy_n8n_bundle.py --apply"]:
+        if required not in installer_text:
+            err("install_in_n8n.sh", f"installer missing {required!r}")
+
 if ERRORS:
     print("Validation failed:", file=sys.stderr)
     for item in ERRORS:

@@ -25,6 +25,14 @@ N8N_API_KEY=n8n_api_DEIN_ECHTER_KEY
 
 ## 3. Erst Secret-Scan und Dry-run ausführen
 
+Einfacher Weg:
+
+```bash
+./install_in_n8n.sh check
+```
+
+Manuell geht auch:
+
 ```bash
 python3 tools/scan_secrets.py
 python3 tools/deploy_n8n_bundle.py
@@ -33,6 +41,12 @@ python3 tools/deploy_n8n_bundle.py
 Wenn hier 36 Workflows angezeigt werden, ist das Bundle lokal bereit.
 
 ## 4. In n8n importieren / binden
+
+```bash
+./install_in_n8n.sh deploy
+```
+
+Manuell geht auch:
 
 ```bash
 python3 tools/deploy_n8n_bundle.py --apply
@@ -71,6 +85,12 @@ Teste `METROPOLIS_OPERATIONS_ENGINE` mit:
 ## 8. Erst danach aktivieren
 
 Wenn die Tests erfolgreich sind:
+
+```bash
+./install_in_n8n.sh activate
+```
+
+Manuell geht auch:
 
 ```bash
 python3 tools/deploy_n8n_bundle.py --apply --activate
