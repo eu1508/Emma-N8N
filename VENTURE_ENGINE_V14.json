@@ -1,115 +1,184 @@
 {
-    "name": "VENTURE_ENGINE_V14",
-    "nodes": [
-        {
-            "parameters": {
-                "path": "venture-engine",
-                "method": "POST",
-                "options": {}
-            },
-            "id": "venture-in",
-            "name": "VENTURE_IN",
-            "type": "n8n-nodes-base.webhook",
-            "typeVersion": 1,
-            "position": [
-                200,
-                400
-            ]
-        },
-        {
-            "parameters": {
-                "modelName": "models/gemini-1.5-pro",
-                "options": {
-                    "temperature": 0.8
-                }
-            },
-            "id": "venture-model",
-            "name": "Venture Brain",
-            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
-            "typeVersion": 1,
-            "position": [
-                450,
-                550
-            ],
-            "credentials": {
-                "googlePalmApi": {
-                    "id": "U6jVg3cxRNRwbqPQ",
-                    "name": "Google Gemini API"
-                }
-            }
-        },
-        {
-            "parameters": {
-                "promptType": "define",
-                "text": "=Du bist der VENTURE-ARCHITEKT (v14.0) von EMMA METROPOLIS.\n\nDEINE ROLLEN: Business-Builder, Dropshipping-Experte, Monetarisierungs-Genie.\nDEIN FOKUS: Firmengründung, E-Commerce, Marketing-Kampagnen, KI-Business-Modelle (Art, Music, Kurs-Erstellung).\n\nAUFGABE: Erstelle eine Strategie für Irinas neue Geschäftsidee. Nutze die 10 Monetarisierungs-Prinzipien (Marketing, Kunst, Musik, Social Media, Content, Übersetzung, Kurse, Software, Datenanalyse, Expertenstatus).\n\nInput: {{$json.text}}\n\nAntworte als Business-Plan (JSON):\n{\n  \"business_model\": \"Dropshipping / Agency / Infoproduct / etc.\",\n  \"strategy_steps\": [\"Phase 1: Setup\", \"Phase 2: Scale\"],\n  \"monetization_idea\": \"Wie genau wird damit Geld verdient?\",\n  \"target_audience\": \"Wer soll das kaufen?\",\n  \"growth_potential\": \"Skalierbarkeit 1-10\"\n}"
-            },
-            "id": "venture-logic",
-            "name": "Venture Logic",
-            "type": "@n8n/n8n-nodes-langchain.chainLlm",
-            "typeVersion": 1.4,
-            "position": [
-                450,
-                400
-            ]
-        },
-        {
-            "parameters": {
-                "operation": "executeQuery",
-                "query": "=INSERT INTO global_registry (key, value, context) VALUES ('VENTURE_PLAN_' || Date.now(), '{{$json.business_model}}', 'Venture Plan generated');",
-                "options": {}
-            },
-            "id": "save-venture",
-            "name": "Save to SQLite",
-            "type": "n8n-nodes-base.sqlite",
-            "typeVersion": 1,
-            "position": [
-                700,
-                400
-            ],
-            "credentials": {
-                "sqlite": {
-                    "id": "local_sqlite_metropolis",
-                    "name": "Metropolis SQLite"
-                }
-            }
-        }
-    ],
-    "connections": {
-        "VENTURE_IN": {
-            "main": [
-                [
-                    {
-                        "node": "venture-logic",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "venture-model": {
-            "ai_languageModel": [
-                [
-                    {
-                        "node": "venture-logic",
-                        "type": "ai_languageModel",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "venture-logic": {
-            "main": [
-                [
-                    {
-                        "node": "save-venture",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        }
+  "name": "VENTURE_ENGINE_V14",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "venture-engine",
+        "method": "POST",
+        "options": {}
+      },
+      "id": "venture-in",
+      "name": "VENTURE_IN",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        200,
+        400
+      ]
     },
-    "settings": {
-        "executionOrder": "v1"
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "text",
+              "type": "string"
+            },
+            {
+              "name": "engine",
+              "type": "string"
+            },
+            {
+              "name": "source",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "execute-input",
+      "name": "Execute Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0.8
+        }
+      },
+      "id": "venture-model",
+      "name": "Venture Brain",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        450,
+        550
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "U6jVg3cxRNRwbqPQ",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=SYSTEM-REGELN FÜR EMMA METROPOLIS:\n- Antworte immer als valides JSON-Objekt, ohne Markdown, ohne Erklärtext außerhalb des JSON.\n- Nutze als Eingang bevorzugt: {{ $json.original_input || $json.text || $json.chatInput || $json.body?.text || $json.message?.text || $json.task || JSON.stringify($json) }}\n- Wenn Informationen fehlen, setze sinnvolle Defaults und gib im Feld \"missing_inputs\" eine kurze Liste zurück.\n- Keine Secrets, Tokens oder Credentials ausgeben. Externe Aktionen nur als sichere, prüfbare Aktionspläne formulieren.\n- Jede Antwort muss \"skill\", \"status\", \"summary\", \"actions\" und \"next_step\" enthalten.\n- Aktiver Skill: VENTURE — Venture-Building: Geschäftsmodell, Monetarisierung, Zielgruppe und Scale-Plan liefern.\n\nWORKFLOW-PROMPT:\nDu bist der VENTURE-ARCHITEKT (v14.0) von EMMA METROPOLIS.\n\nDEINE ROLLEN: Business-Builder, Dropshipping-Experte, Monetarisierungs-Genie.\nDEIN FOKUS: Firmengründung, E-Commerce, Marketing-Kampagnen, KI-Business-Modelle (Art, Music, Kurs-Erstellung).\n\nAUFGABE: Erstelle eine Strategie für Irinas neue Geschäftsidee. Nutze die 10 Monetarisierungs-Prinzipien (Marketing, Kunst, Musik, Social Media, Content, Übersetzung, Kurse, Software, Datenanalyse, Expertenstatus).\n\nInput: {{$json.original_input || $json.text || $json.raw_llm_output}}\n\nAntworte als Business-Plan (JSON):\n{\n  \"business_model\": \"Dropshipping / Agency / Infoproduct / etc.\",\n  \"strategy_steps\": [\"Phase 1: Setup\", \"Phase 2: Scale\"],\n  \"monetization_idea\": \"Wie genau wird damit Geld verdient?\",\n  \"target_audience\": \"Wer soll das kaufen?\",\n  \"growth_potential\": \"Skalierbarkeit 1-10\"\n}"
+      },
+      "id": "venture-logic",
+      "name": "Venture Logic",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        450,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=CREATE TABLE IF NOT EXISTS global_registry (key TEXT PRIMARY KEY, value TEXT, context TEXT, updated_at TEXT DEFAULT CURRENT_TIMESTAMP); INSERT OR REPLACE INTO global_registry (key, value, context) VALUES ('VENTURE_PLAN_' || Date.now(), '{{$json.business_model}}', 'Venture Plan generated');",
+        "options": {}
+      },
+      "id": "save-venture",
+      "name": "Save to SQLite",
+      "type": "n8n-nodes-base.sqlite",
+      "typeVersion": 1,
+      "position": [
+        700,
+        400
+      ],
+      "credentials": {
+        "sqlite": {
+          "id": "local_sqlite_metropolis",
+          "name": "Metropolis SQLite"
+        }
+      },
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "parameters": {
+        "functionCode": "const input = $json;\nconst candidates = [input.output, input.text, input.response, input.result, input.message?.content, input.data];\nlet raw = candidates.find(v => v !== undefined && v !== null && v !== '');\nlet parsed = {};\nif (typeof raw === 'object') {\n  parsed = raw;\n  raw = JSON.stringify(raw);\n} else if (typeof raw === 'string') {\n  const fenced = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/i);\n  const body = fenced ? fenced[1] : raw;\n  const jsonMatch = body.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    try { parsed = JSON.parse(jsonMatch[0]); } catch (error) { parsed = { parse_error: error.message }; }\n  }\n}\nreturn [{ json: { ...input, raw_llm_output: raw ?? '', ...parsed } }];"
+      },
+      "id": "parse-venture-logic-json",
+      "name": "Parse Venture Logic JSON",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        670,
+        400
+      ]
     }
+  ],
+  "connections": {
+    "VENTURE_IN": {
+      "main": [
+        [
+          {
+            "node": "Venture Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Venture Brain": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Venture Logic",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Venture Logic": {
+      "main": [
+        [
+          {
+            "node": "Parse Venture Logic JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Input": {
+      "main": [
+        [
+          {
+            "node": "Venture Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Venture Logic JSON": {
+      "main": [
+        [
+          {
+            "node": "Save to SQLite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "emma-repaired-2026-05-15",
+  "id": "VENTURE_ENGINE_V14"
 }

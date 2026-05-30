@@ -1,88 +1,122 @@
 {
-    "name": "SHOPIFY_ENGINE_V700",
-    "nodes": [
-        {
-            "parameters": {
-                "workflowInputs": {
-                    "values": [
-                        {
-                            "name": "text",
-                            "type": "string"
-                        }
-                    ]
-                }
+  "name": "SHOPIFY_ENGINE_V700",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "text",
+              "type": "string"
             },
-            "id": "shop-input",
-            "name": "Shopify Request",
-            "type": "n8n-nodes-base.executeWorkflowTrigger",
-            "typeVersion": 1,
-            "position": [
-                240,
-                300
-            ]
-        },
-        {
-            "parameters": {
-                "modelName": "models/gemini-1.5-pro",
-                "options": {
-                    "temperature": 0.4
-                }
+            {
+              "name": "engine",
+              "type": "string"
             },
-            "id": "gemini-shop",
-            "name": "Shopify Intelligence",
-            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
-            "typeVersion": 1,
-            "position": [
-                460,
-                450
-            ],
-            "credentials": {
-                "googlePalmApi": {
-                    "id": "U6jVg3cxRNRwbqPQ",
-                    "name": "Google Gemini API"
-                }
+            {
+              "name": "source",
+              "type": "string"
             }
-        },
-        {
-            "parameters": {
-                "promptType": "define",
-                "text": "=Du bist EMMA's Shopify-Managerin.\n\nAnalysiere die Anfrage:\n{{ $json.text }}\n\nFormuliere die notwendigen Shopify-Aktionen (Produkte, Bestellungen, Inventory).\n\nAntworte als JSON:\n{\n  \"action\": \"CREATE_PROD|UPDATE_STOCK|GET_ORDERS\",\n  \"parameters\": {},\n  \"strategic_goal\": \"Umsatzmaximierung\"\n}"
-            },
-            "id": "shop-logic",
-            "name": "Shopify Logic",
-            "type": "@n8n/n8n-nodes-langchain.chainLlm",
-            "typeVersion": 1.4,
-            "position": [
-                460,
-                300
-            ]
+          ]
         }
-    ],
-    "connections": {
-        "Shopify Request": {
-            "main": [
-                [
-                    {
-                        "node": "Shopify Logic",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "gemini-shop": {
-            "ai_languageModel": [
-                [
-                    {
-                        "node": "Shopify Logic",
-                        "type": "ai_languageModel",
-                        "index": 0
-                    }
-                ]
-            ]
-        }
+      },
+      "id": "shop-input",
+      "name": "Shopify Request",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
     },
-    "settings": {
-        "executionOrder": "v1"
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0.4
+        }
+      },
+      "id": "gemini-shop",
+      "name": "Shopify Intelligence",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        460,
+        450
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "U6jVg3cxRNRwbqPQ",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=SYSTEM-REGELN FÜR EMMA METROPOLIS:\n- Antworte immer als valides JSON-Objekt, ohne Markdown, ohne Erklärtext außerhalb des JSON.\n- Nutze als Eingang bevorzugt: {{ $json.original_input || $json.text || $json.chatInput || $json.body?.text || $json.message?.text || $json.task || JSON.stringify($json) }}\n- Wenn Informationen fehlen, setze sinnvolle Defaults und gib im Feld \"missing_inputs\" eine kurze Liste zurück.\n- Keine Secrets, Tokens oder Credentials ausgeben. Externe Aktionen nur als sichere, prüfbare Aktionspläne formulieren.\n- Jede Antwort muss \"skill\", \"status\", \"summary\", \"actions\" und \"next_step\" enthalten.\n- Aktiver Skill: SHOPIFY — Shopify-Commerce: Produkt-, Bestell-, Inventory- und Umsatzaktionen planen.\n\nWORKFLOW-PROMPT:\nDu bist EMMA's Shopify-Managerin.\n\nAnalysiere die Anfrage:\n{{ $json.original_input || $json.text || $json.raw_llm_output }}\n\nFormuliere die notwendigen Shopify-Aktionen (Produkte, Bestellungen, Inventory).\n\nAntworte als JSON:\n{\n  \"action\": \"CREATE_PROD|UPDATE_STOCK|GET_ORDERS\",\n  \"parameters\": {},\n  \"strategic_goal\": \"Umsatzmaximierung\"\n}"
+      },
+      "id": "shop-logic",
+      "name": "Shopify Logic",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const input = $json;\nconst candidates = [input.output, input.text, input.response, input.result, input.message?.content, input.data];\nlet raw = candidates.find(v => v !== undefined && v !== null && v !== '');\nlet parsed = {};\nif (typeof raw === 'object') {\n  parsed = raw;\n  raw = JSON.stringify(raw);\n} else if (typeof raw === 'string') {\n  const fenced = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/i);\n  const body = fenced ? fenced[1] : raw;\n  const jsonMatch = body.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    try { parsed = JSON.parse(jsonMatch[0]); } catch (error) { parsed = { parse_error: error.message }; }\n  }\n}\nreturn [{ json: { ...input, raw_llm_output: raw ?? '', ...parsed } }];"
+      },
+      "id": "parse-shopify-logic-json",
+      "name": "Parse Shopify Logic JSON",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ]
     }
+  ],
+  "connections": {
+    "Shopify Request": {
+      "main": [
+        [
+          {
+            "node": "Shopify Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shopify Intelligence": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Shopify Logic",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shopify Logic": {
+      "main": [
+        [
+          {
+            "node": "Parse Shopify Logic JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "emma-repaired-2026-05-15",
+  "id": "SHOPIFY_ENGINE_V700"
 }

@@ -1,0 +1,175 @@
+#!/usr/bin/env python3
+"""Validate the exported EMMA n8n workflow bundle for import-time hazards.
+
+Checks covered:
+- every JSON file parses
+- every connection source/target uses an existing node *name* (n8n export format)
+- every Basic LLM Chain has a prompt and exactly at least one connected language model
+- no chain node incorrectly carries model credentials directly
+- webhooks are POST-capable and database nodes are non-fatal when external setup is missing
+"""
+from __future__ import annotations
+
+import glob
+import json
+import re
+import sys
+from pathlib import Path
+
+ERRORS: list[str] = []
+
+
+def err(path: str, msg: str) -> None:
+    ERRORS.append(f"{path}: {msg}")
+
+
+def walk_edges(value):
+    if isinstance(value, dict):
+        if "node" in value:
+            yield value["node"]
+        for child in value.values():
+            yield from walk_edges(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from walk_edges(child)
+
+
+for path in sorted(glob.glob("*.json")):
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except Exception as exc:  # pragma: no cover - CLI guard
+        err(path, f"invalid JSON: {exc}")
+        continue
+
+    if not data.get("id"):
+        err(path, "workflow has no stable top-level id for Execute Sub-workflow references")
+
+    nodes = data.get("nodes", [])
+    names = {node.get("name") for node in nodes}
+    chains = {node.get("name") for node in nodes if node.get("type") == "@n8n/n8n-nodes-langchain.chainLlm"}
+    model_targets: dict[str, int] = {chain: 0 for chain in chains}
+
+    node_by_name = {node.get("name"): node for node in nodes}
+    for src, connection in data.get("connections", {}).items():
+        if src not in names:
+            err(path, f"connection source is not a node name: {src!r}")
+        for ctype, groups in connection.items():
+            if isinstance(groups, list) and any(group == [] for group in groups):
+                err(path, f"connection {src!r}.{ctype} contains an empty output branch")
+        for target in walk_edges(connection):
+            if target not in names:
+                err(path, f"connection target is not a node name: {target!r}")
+        for group in connection.get("ai_languageModel", []) or []:
+            for edge in group:
+                if edge.get("node") in model_targets:
+                    model_targets[edge["node"]] += 1
+
+    for node in nodes:
+        if node.get("type") == "n8n-nodes-base.switch":
+            expected = len(node.get("parameters", {}).get("rules", {}).get("values", []))
+            actual = len(data.get("connections", {}).get(node.get("name"), {}).get("main", []))
+            if actual and expected != actual:
+                err(path, f"switch {node.get('name')!r} has {expected} rules but {actual} connected outputs")
+
+    has_respond = any(node.get("type") == "n8n-nodes-base.respondToWebhook" for node in nodes)
+    for node in nodes:
+        node_type = node.get("type")
+        params = node.get("parameters", {})
+        if node_type == "@n8n/n8n-nodes-langchain.chainLlm":
+            if params.get("modelName") or "credentials" in node:
+                err(path, f"chain {node.get('name')!r} still contains direct model config")
+            if params.get("promptType") != "define" or not params.get("text"):
+                err(path, f"chain {node.get('name')!r} has no explicit prompt")
+            if model_targets.get(node.get("name"), 0) < 1:
+                err(path, f"chain {node.get('name')!r} has no ai_languageModel connection")
+            main_targets = [edge.get("node") for group in data.get("connections", {}).get(node.get("name"), {}).get("main", []) for edge in group]
+            if not any(str(target).startswith("Parse ") and str(target).endswith(" JSON") for target in main_targets):
+                err(path, f"chain {node.get('name')!r} is not followed by a JSON parser")
+        if node_type == "@n8n/n8n-nodes-langchain.lmChatGoogleGemini":
+            if params.get("modelName") != "models/gemini-2.5-flash":
+                err(path, f"Gemini model is not standardized: {node.get('name')!r} -> {params.get('modelName')!r}")
+        if node_type == "n8n-nodes-base.webhook":
+            if params.get("method") != "POST":
+                err(path, f"webhook {node.get('name')!r} is not POST")
+        if node_type in {"n8n-nodes-base.sqlite", "n8n-nodes-base.postgres"}:
+            if not node.get("continueOnFail"):
+                err(path, f"database node {node.get('name')!r} must be continueOnFail to avoid hard stops on missing external DB setup")
+
+    has_execute_trigger = any(node.get("type") == "n8n-nodes-base.executeWorkflowTrigger" for node in nodes)
+    if has_execute_trigger and has_respond:
+        err(path, "workflow mixes Execute Workflow Trigger with Respond to Webhook; this can fail when called internally")
+
+# Cross-workflow sanity: Execute Sub-workflow mappings should point to a stable workflow id/name present in this bundle.
+workflow_ids = set()
+workflow_names = set()
+for workflow_path in sorted(glob.glob("*.json")):
+    workflow = json.loads(Path(workflow_path).read_text(encoding="utf-8"))
+    workflow_ids.add(workflow.get("id"))
+    workflow_names.add(workflow.get("name"))
+
+for workflow_path in sorted(glob.glob("*.json")):
+    workflow = json.loads(Path(workflow_path).read_text(encoding="utf-8"))
+    for node in workflow.get("nodes", []):
+        if node.get("type") != "n8n-nodes-base.executeWorkflow":
+            continue
+        workflow_id = node.get("parameters", {}).get("workflowId", "")
+        mentioned: set[str] = set()
+        if "[$json.engine]" in workflow_id:
+            try:
+                mapping_text = workflow_id.split("={{ ", 1)[1].split("[$json.engine]", 1)[0].strip()
+                mapping = json.loads(mapping_text)
+                mentioned.update(str(value) for value in mapping.values())
+            except Exception as exc:  # pragma: no cover - defensive validator branch
+                err(workflow_path, f"execute workflow node {node.get('name')!r} has unparsable workflowId mapping: {exc}")
+        else:
+            mentioned.update(re.findall(r'"([A-Z][A-Z0-9_]+)"', workflow_id))
+        missing = sorted(item for item in mentioned if item not in workflow_ids and item not in workflow_names)
+        if missing:
+            err(workflow_path, f"execute workflow node {node.get('name')!r} references unknown workflows: {missing}")
+
+# Skill registry sanity: operational guardrails must be routable from shell helpers too.
+skills_path = Path("skills.sh")
+if skills_path.exists():
+    skills_text = skills_path.read_text(encoding="utf-8")
+    for expected_skill in ["OPS=METROPOLIS_OPERATIONS_ENGINE", "ERROR_GUARDIAN=METROPOLIS_ERROR_GUARDIAN"]:
+        if expected_skill not in skills_text:
+            err("skills.sh", f"missing skill registry entry {expected_skill!r}")
+
+# Deployment helper sanity: the bundle should include an operator-facing way to bind into n8n.
+deploy_script = Path("tools/deploy_n8n_bundle.py")
+if not deploy_script.exists():
+    err("tools/deploy_n8n_bundle.py", "missing n8n deployment helper")
+else:
+    deploy_text = deploy_script.read_text(encoding="utf-8")
+    for required in ["N8N_BASE_URL", "N8N_API_KEY", "patch_master_mapping", "--apply"]:
+        if required not in deploy_text:
+            err("tools/deploy_n8n_bundle.py", f"deployment helper missing {required!r}")
+
+# Operator quickstart sanity: keep the next-action docs and env template available.
+for required_path in [Path(".env.n8n.example"), Path("docs/WAS_DU_JETZT_MACHEN_SOLLT.md")]:
+    if not required_path.exists():
+        err(str(required_path), "missing operator quickstart artifact")
+
+# Secret scanner sanity: prevent accidental commits of raw provider tokens.
+if not Path("tools/scan_secrets.py").exists():
+    err("tools/scan_secrets.py", "missing secret scanner")
+if not Path("docs/SECURITY_INCIDENT_RESPONSE.md").exists():
+    err("docs/SECURITY_INCIDENT_RESPONSE.md", "missing leaked-secret response runbook")
+
+# Installer wrapper sanity: give operators a one-command entry point.
+installer = Path("install_in_n8n.sh")
+if not installer.exists():
+    err("install_in_n8n.sh", "missing one-command n8n installer")
+else:
+    installer_text = installer.read_text(encoding="utf-8")
+    for required in ["check", "deploy", "activate", "tools/scan_secrets.py", "tools/deploy_n8n_bundle.py --apply"]:
+        if required not in installer_text:
+            err("install_in_n8n.sh", f"installer missing {required!r}")
+
+if ERRORS:
+    print("Validation failed:", file=sys.stderr)
+    for item in ERRORS:
+        print(f"- {item}", file=sys.stderr)
+    sys.exit(1)
+
+print("Validated n8n workflow bundle successfully.")

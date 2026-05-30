@@ -1,0 +1,148 @@
+{
+  "name": "METROPOLIS_ERROR_GUARDIAN",
+  "id": "METROPOLIS_ERROR_GUARDIAN",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "ERROR_IN",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        180,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "text",
+              "type": "string"
+            },
+            {
+              "name": "engine",
+              "type": "string"
+            },
+            {
+              "name": "source",
+              "type": "string"
+            },
+            {
+              "name": "workflowName",
+              "type": "string"
+            },
+            {
+              "name": "nodeName",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "error-execute",
+      "name": "Execute Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        180,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const input = $json;\nconst err = input.execution?.error || input.error || input;\nconst workflow = input.workflow?.name || input.workflowName || input.engine || 'UNKNOWN_WORKFLOW';\nconst message = err.message || err.description || input.text || 'Unknown n8n error';\nconst node = input.execution?.lastNodeExecuted || input.node?.name || input.nodeName || 'UNKNOWN_NODE';\nconst severity = /credential|auth|unauthorized|forbidden|timeout|rate/i.test(message) ? 'HIGH' : 'MEDIUM';\nreturn [{ json: {\n  skill: 'ERROR_GUARDIAN',\n  status: 'ERROR_CAPTURED',\n  severity,\n  workflow,\n  node,\n  error_message: message,\n  summary: `${severity} issue in ${workflow} at ${node}: ${message}`,\n  actions: [\n    'Keep workflow in degraded mode where possible; do not expose secrets in logs.',\n    'Check credential validity and recent node changes first.',\n    'Re-run the affected workflow with a small health-check payload after remediation.'\n  ],\n  next_step: 'Open the failed execution in n8n, fix credential/table/node configuration, then run METROPOLIS_OPERATIONS_ENGINE.',\n  missing_inputs: []\n}}];"
+      },
+      "id": "normalize-error",
+      "name": "Normalize Error Event",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        480,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=CREATE TABLE IF NOT EXISTS engine_errors (workflow TEXT, node TEXT, severity TEXT, message TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP); INSERT INTO engine_errors (workflow, node, severity, message) VALUES ('{{ $json.workflow }}', '{{ $json.node }}', '{{ $json.severity }}', '{{ $json.error_message }}');",
+        "options": {}
+      },
+      "id": "save-error",
+      "name": "Save Error Event",
+      "type": "n8n-nodes-base.sqlite",
+      "typeVersion": 1,
+      "position": [
+        760,
+        420
+      ],
+      "credentials": {
+        "sqlite": {
+          "id": "local_sqlite_metropolis",
+          "name": "Metropolis SQLite"
+        }
+      },
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "parameters": {
+        "functionCode": "return items;"
+      },
+      "id": "return-error-report",
+      "name": "Return Error Report",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        760,
+        220
+      ]
+    }
+  ],
+  "connections": {
+    "ERROR_IN": {
+      "main": [
+        [
+          {
+            "node": "Normalize Error Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Input": {
+      "main": [
+        [
+          {
+            "node": "Normalize Error Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Error Event": {
+      "main": [
+        [
+          {
+            "node": "Save Error Event",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Return Error Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "emma-error-guardian-2026-05-15"
+}

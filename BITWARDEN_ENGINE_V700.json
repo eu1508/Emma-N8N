@@ -1,54 +1,64 @@
 {
-    "name": "BITWARDEN_ENGINE_V700",
-    "nodes": [
-        {
-            "parameters": {
-                "workflowInputs": {
-                    "values": [
-                        {
-                            "name": "text",
-                            "type": "string"
-                        }
-                    ]
-                }
+  "name": "BITWARDEN_ENGINE_V700",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "text",
+              "type": "string"
             },
-            "id": "trigger",
-            "name": "Execute Input",
-            "type": "n8n-nodes-base.executeWorkflowTrigger",
-            "typeVersion": 1,
-            "position": [
-                240,
-                300
-            ]
-        },
-        {
-            "parameters": {
-                "notice": "Sicherheits-Engine für Passwörter und Secrets."
+            {
+              "name": "engine",
+              "type": "string"
             },
-            "id": "info",
-            "name": "Security Vault",
-            "type": "n8n-nodes-base.noOp",
-            "typeVersion": 1,
-            "position": [
-                460,
-                300
-            ]
+            {
+              "name": "source",
+              "type": "string"
+            }
+          ]
         }
-    ],
-    "connections": {
-        "trigger": {
-            "main": [
-                [
-                    {
-                        "node": "info",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        }
+      },
+      "id": "trigger",
+      "name": "Execute Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
     },
-    "settings": {
-        "executionOrder": "v1"
+    {
+      "parameters": {
+        "functionCode": "const text = $json.original_input || $json.text || $json.chatInput || JSON.stringify($json);\nreturn [{ json: {\n  skill: 'BITWARDEN',\n  status: 'OK',\n  summary: 'Security/Vault request converted into a safe execution plan without exposing secrets.',\n  requested_input: text,\n  actions: [\n    'Identify the credential or vault item category without printing secret values.',\n    'Rotate or update credentials only inside Bitwarden/n8n credentials UI.',\n    'Record a non-sensitive audit note after completion.'\n  ],\n  next_step: 'Use the Bitwarden credential/UI or a dedicated Bitwarden node with scoped credentials; never paste tokens into chat.',\n  missing_inputs: text ? [] : ['text']\n}}];"
+      },
+      "id": "info",
+      "name": "Security Vault",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ]
     }
+  ],
+  "connections": {
+    "Execute Input": {
+      "main": [
+        [
+          {
+            "node": "Security Vault",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "emma-repaired-2026-05-15",
+  "id": "BITWARDEN_ENGINE_V700"
 }

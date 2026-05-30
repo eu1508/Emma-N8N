@@ -1,115 +1,184 @@
 {
-    "name": "FINANCE_ENGINE_V14",
-    "nodes": [
-        {
-            "parameters": {
-                "path": "finance-engine",
-                "method": "POST",
-                "options": {}
-            },
-            "id": "finance-in",
-            "name": "FINANCE_IN",
-            "type": "n8n-nodes-base.webhook",
-            "typeVersion": 1,
-            "position": [
-                200,
-                400
-            ]
-        },
-        {
-            "parameters": {
-                "modelName": "models/gemini-1.5-pro",
-                "options": {
-                    "temperature": 0.2
-                }
-            },
-            "id": "finance-model",
-            "name": "Finance Brain",
-            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
-            "typeVersion": 1,
-            "position": [
-                450,
-                550
-            ],
-            "credentials": {
-                "googlePalmApi": {
-                    "id": "U6jVg3cxRNRwbqPQ",
-                    "name": "Google Gemini API"
-                }
-            }
-        },
-        {
-            "parameters": {
-                "promptType": "define",
-                "text": "=Du bist der FINANZ-STRATEGE (v14.0) von EMMA METROPOLIS.\n\nDEINE ROLLEN: Buchhalter, Steuerberater, Wirtschaftsanalyst.\nDEIN FOKUS: Profitabilität, Steuern, Buchhaltung, Kostenkontrolle, Rechnungslegung.\n\nAUFGABE: Analysiere die finanzielle Anfrage von Irina. Denke wie ein CFO.\n\nInput: {{$json.text}}\n\nAntworte als Finanzbericht (JSON):\n{\n  \"financial_health\": \"Status der Finanzen/Wirtschaftlichkeit\",\n  \"tax_implications\": \"Was ist steuerlich zu beachten?\",\n  \"profit_optimization\": [\"Optimierung 1\", \"Optimierung 2\"],\n  \"economic_outlook\": \"Marktanalyse/Trend\",\n  \"roi_prediction\": \"Erwarteter Erfolg\"\n}"
-            },
-            "id": "finance-logic",
-            "name": "Finance Logic",
-            "type": "@n8n/n8n-nodes-langchain.chainLlm",
-            "typeVersion": 1.4,
-            "position": [
-                450,
-                400
-            ]
-        },
-        {
-            "parameters": {
-                "operation": "executeQuery",
-                "query": "=INSERT INTO kpi_metrics (metric_name, value, unit) VALUES ('FINANCE_ANALYSIS', 1, 'count');",
-                "options": {}
-            },
-            "id": "save-finance",
-            "name": "Save to SQLite",
-            "type": "n8n-nodes-base.sqlite",
-            "typeVersion": 1,
-            "position": [
-                700,
-                400
-            ],
-            "credentials": {
-                "sqlite": {
-                    "id": "local_sqlite_metropolis",
-                    "name": "Metropolis SQLite"
-                }
-            }
-        }
-    ],
-    "connections": {
-        "FINANCE_IN": {
-            "main": [
-                [
-                    {
-                        "node": "Finance Logic",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "finance-model": {
-            "ai_languageModel": [
-                [
-                    {
-                        "node": "Finance Logic",
-                        "type": "ai_languageModel",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "Finance Logic": {
-            "main": [
-                [
-                    {
-                        "node": "save-finance",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        }
+  "name": "FINANCE_ENGINE_V14",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "finance-engine",
+        "method": "POST",
+        "options": {}
+      },
+      "id": "finance-in",
+      "name": "FINANCE_IN",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        200,
+        400
+      ]
     },
-    "settings": {
-        "executionOrder": "v1"
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "text",
+              "type": "string"
+            },
+            {
+              "name": "engine",
+              "type": "string"
+            },
+            {
+              "name": "source",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "execute-input",
+      "name": "Execute Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "finance-model",
+      "name": "Finance Brain",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        450,
+        550
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "U6jVg3cxRNRwbqPQ",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=SYSTEM-REGELN FÜR EMMA METROPOLIS:\n- Antworte immer als valides JSON-Objekt, ohne Markdown, ohne Erklärtext außerhalb des JSON.\n- Nutze als Eingang bevorzugt: {{ $json.original_input || $json.text || $json.chatInput || $json.body?.text || $json.message?.text || $json.task || JSON.stringify($json) }}\n- Wenn Informationen fehlen, setze sinnvolle Defaults und gib im Feld \"missing_inputs\" eine kurze Liste zurück.\n- Keine Secrets, Tokens oder Credentials ausgeben. Externe Aktionen nur als sichere, prüfbare Aktionspläne formulieren.\n- Jede Antwort muss \"skill\", \"status\", \"summary\", \"actions\" und \"next_step\" enthalten.\n- Aktiver Skill: FINANCE — Finanzen/CFO: Kosten, ROI, Steuern, Buchhaltung und Profithebel analysieren.\n\nWORKFLOW-PROMPT:\nDu bist der FINANZ-STRATEGE (v14.0) von EMMA METROPOLIS.\n\nDEINE ROLLEN: Buchhalter, Steuerberater, Wirtschaftsanalyst.\nDEIN FOKUS: Profitabilität, Steuern, Buchhaltung, Kostenkontrolle, Rechnungslegung.\n\nAUFGABE: Analysiere die finanzielle Anfrage von Irina. Denke wie ein CFO.\n\nInput: {{$json.original_input || $json.text || $json.raw_llm_output}}\n\nAntworte als Finanzbericht (JSON):\n{\n  \"financial_health\": \"Status der Finanzen/Wirtschaftlichkeit\",\n  \"tax_implications\": \"Was ist steuerlich zu beachten?\",\n  \"profit_optimization\": [\"Optimierung 1\", \"Optimierung 2\"],\n  \"economic_outlook\": \"Marktanalyse/Trend\",\n  \"roi_prediction\": \"Erwarteter Erfolg\"\n}"
+      },
+      "id": "finance-logic",
+      "name": "Finance Logic",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        450,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=CREATE TABLE IF NOT EXISTS kpi_metrics (metric_name TEXT, value TEXT, unit TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP); INSERT INTO kpi_metrics (metric_name, value, unit) VALUES ('FINANCE_ANALYSIS', 1, 'count');",
+        "options": {}
+      },
+      "id": "save-finance",
+      "name": "Save to SQLite",
+      "type": "n8n-nodes-base.sqlite",
+      "typeVersion": 1,
+      "position": [
+        700,
+        400
+      ],
+      "credentials": {
+        "sqlite": {
+          "id": "local_sqlite_metropolis",
+          "name": "Metropolis SQLite"
+        }
+      },
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "parameters": {
+        "functionCode": "const input = $json;\nconst candidates = [input.output, input.text, input.response, input.result, input.message?.content, input.data];\nlet raw = candidates.find(v => v !== undefined && v !== null && v !== '');\nlet parsed = {};\nif (typeof raw === 'object') {\n  parsed = raw;\n  raw = JSON.stringify(raw);\n} else if (typeof raw === 'string') {\n  const fenced = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/i);\n  const body = fenced ? fenced[1] : raw;\n  const jsonMatch = body.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    try { parsed = JSON.parse(jsonMatch[0]); } catch (error) { parsed = { parse_error: error.message }; }\n  }\n}\nreturn [{ json: { ...input, raw_llm_output: raw ?? '', ...parsed } }];"
+      },
+      "id": "parse-finance-logic-json",
+      "name": "Parse Finance Logic JSON",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        670,
+        400
+      ]
     }
+  ],
+  "connections": {
+    "FINANCE_IN": {
+      "main": [
+        [
+          {
+            "node": "Finance Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finance Brain": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Finance Logic",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finance Logic": {
+      "main": [
+        [
+          {
+            "node": "Parse Finance Logic JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Input": {
+      "main": [
+        [
+          {
+            "node": "Finance Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Finance Logic JSON": {
+      "main": [
+        [
+          {
+            "node": "Save to SQLite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "emma-repaired-2026-05-15",
+  "id": "FINANCE_ENGINE_V14"
 }

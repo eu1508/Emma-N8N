@@ -1,57 +1,102 @@
 {
-    "name": "METROPOLIS_V14_SYNC_BRIDGE",
-    "nodes": [
-        {
-            "parameters": {
-                "path": "metropolis-sync",
-                "method": "POST",
-                "options": {}
-            },
-            "id": "webhook-sync",
-            "name": "Local Sync Trigger",
-            "type": "n8n-nodes-base.webhook",
-            "typeVersion": 1,
-            "position": [
-                200,
-                400
-            ]
-        },
-        {
-            "parameters": {
-                "operation": "executeQuery",
-                "query": "=INSERT INTO global_registry (key, value, context) VALUES ('METROPOLIS_STATUS', 'ACTIVE', 'Sync via Bridge');",
-                "options": {}
-            },
-            "id": "update-registry",
-            "name": "Update Registry",
-            "type": "n8n-nodes-base.sqlite",
-            "typeVersion": 1,
-            "position": [
-                450,
-                400
-            ],
-            "credentials": {
-                "sqlite": {
-                    "id": "local_sqlite_metropolis",
-                    "name": "Metropolis SQLite"
-                }
-            }
-        }
-    ],
-    "connections": {
-        "Local Sync Trigger": {
-            "main": [
-                [
-                    {
-                        "node": "update-registry",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        }
+  "name": "METROPOLIS_V14_SYNC_BRIDGE",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "metropolis-sync",
+        "method": "POST",
+        "options": {}
+      },
+      "id": "webhook-sync",
+      "name": "Local Sync Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        200,
+        400
+      ]
     },
-    "settings": {
-        "executionOrder": "v1"
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "text",
+              "type": "string"
+            },
+            {
+              "name": "engine",
+              "type": "string"
+            },
+            {
+              "name": "source",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "execute-input",
+      "name": "Execute Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=CREATE TABLE IF NOT EXISTS global_registry (key TEXT PRIMARY KEY, value TEXT, context TEXT, updated_at TEXT DEFAULT CURRENT_TIMESTAMP); INSERT OR REPLACE INTO global_registry (key, value, context) VALUES ('METROPOLIS_STATUS', 'ACTIVE', 'Sync via Bridge');",
+        "options": {}
+      },
+      "id": "update-registry",
+      "name": "Update Registry",
+      "type": "n8n-nodes-base.sqlite",
+      "typeVersion": 1,
+      "position": [
+        450,
+        400
+      ],
+      "credentials": {
+        "sqlite": {
+          "id": "local_sqlite_metropolis",
+          "name": "Metropolis SQLite"
+        }
+      },
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
     }
+  ],
+  "connections": {
+    "Local Sync Trigger": {
+      "main": [
+        [
+          {
+            "node": "Update Registry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Input": {
+      "main": [
+        [
+          {
+            "node": "Update Registry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "emma-repaired-2026-05-15",
+  "id": "METROPOLIS_V14_SYNC_BRIDGE"
 }

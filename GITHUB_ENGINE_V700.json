@@ -1,88 +1,122 @@
 {
-    "name": "GITHUB_ENGINE_V700",
-    "nodes": [
-        {
-            "parameters": {
-                "workflowInputs": {
-                    "values": [
-                        {
-                            "name": "text",
-                            "type": "string"
-                        }
-                    ]
-                }
+  "name": "GITHUB_ENGINE_V700",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "text",
+              "type": "string"
             },
-            "id": "git-input",
-            "name": "Dev Input",
-            "type": "n8n-nodes-base.executeWorkflowTrigger",
-            "typeVersion": 1,
-            "position": [
-                240,
-                300
-            ]
-        },
-        {
-            "parameters": {
-                "modelName": "models/gemini-1.5-pro",
-                "options": {
-                    "temperature": 0.2
-                }
+            {
+              "name": "engine",
+              "type": "string"
             },
-            "id": "gemini-git",
-            "name": "Git Intelligence",
-            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
-            "typeVersion": 1,
-            "position": [
-                460,
-                450
-            ],
-            "credentials": {
-                "googlePalmApi": {
-                    "id": "U6jVg3cxRNRwbqPQ",
-                    "name": "Google Gemini API"
-                }
+            {
+              "name": "source",
+              "type": "string"
             }
-        },
-        {
-            "parameters": {
-                "promptType": "define",
-                "text": "=Du bist EMMA's Software-Architektin.\n\nAnalysiere die Dev-Anfrage:\n{{ $json.text }}\n\nFormuliere GitHub-Aktionen (Issues, Repo-Management, Commits).\n\nAntworte als JSON:\n{\n  \"action\": \"CREATE_ISSUE|REPO_AUDIT|CODE_REVIEW\",\n  \"repo\": \"DefaultRepo\",\n  \"details\": \"Was ist zu tun?\"\n}"
-            },
-            "id": "git-logic",
-            "name": "Git Logic",
-            "type": "@n8n/n8n-nodes-langchain.chainLlm",
-            "typeVersion": 1.4,
-            "position": [
-                460,
-                300
-            ]
+          ]
         }
-    ],
-    "connections": {
-        "Dev Input": {
-            "main": [
-                [
-                    {
-                        "node": "Git Logic",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "gemini-git": {
-            "ai_languageModel": [
-                [
-                    {
-                        "node": "Git Logic",
-                        "type": "ai_languageModel",
-                        "index": 0
-                    }
-                ]
-            ]
-        }
+      },
+      "id": "git-input",
+      "name": "Dev Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
     },
-    "settings": {
-        "executionOrder": "v1"
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "gemini-git",
+      "name": "Git Intelligence",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        460,
+        450
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "U6jVg3cxRNRwbqPQ",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=SYSTEM-REGELN FÜR EMMA METROPOLIS:\n- Antworte immer als valides JSON-Objekt, ohne Markdown, ohne Erklärtext außerhalb des JSON.\n- Nutze als Eingang bevorzugt: {{ $json.original_input || $json.text || $json.chatInput || $json.body?.text || $json.message?.text || $json.task || JSON.stringify($json) }}\n- Wenn Informationen fehlen, setze sinnvolle Defaults und gib im Feld \"missing_inputs\" eine kurze Liste zurück.\n- Keine Secrets, Tokens oder Credentials ausgeben. Externe Aktionen nur als sichere, prüfbare Aktionspläne formulieren.\n- Jede Antwort muss \"skill\", \"status\", \"summary\", \"actions\" und \"next_step\" enthalten.\n- Aktiver Skill: GITHUB — GitHub-Engineering: Issues, PRs, Reviews, Repo-Audits und Commit-Pläne sicher formulieren.\n\nWORKFLOW-PROMPT:\nDu bist EMMA's Software-Architektin.\n\nAnalysiere die Dev-Anfrage:\n{{ $json.original_input || $json.text || $json.raw_llm_output }}\n\nFormuliere GitHub-Aktionen (Issues, Repo-Management, Commits).\n\nAntworte als JSON:\n{\n  \"action\": \"CREATE_ISSUE|REPO_AUDIT|CODE_REVIEW\",\n  \"repo\": \"DefaultRepo\",\n  \"details\": \"Was ist zu tun?\"\n}"
+      },
+      "id": "git-logic",
+      "name": "Git Logic",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const input = $json;\nconst candidates = [input.output, input.text, input.response, input.result, input.message?.content, input.data];\nlet raw = candidates.find(v => v !== undefined && v !== null && v !== '');\nlet parsed = {};\nif (typeof raw === 'object') {\n  parsed = raw;\n  raw = JSON.stringify(raw);\n} else if (typeof raw === 'string') {\n  const fenced = raw.match(/```(?:json)?\\s*([\\s\\S]*?)```/i);\n  const body = fenced ? fenced[1] : raw;\n  const jsonMatch = body.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    try { parsed = JSON.parse(jsonMatch[0]); } catch (error) { parsed = { parse_error: error.message }; }\n  }\n}\nreturn [{ json: { ...input, raw_llm_output: raw ?? '', ...parsed } }];"
+      },
+      "id": "parse-git-logic-json",
+      "name": "Parse Git Logic JSON",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ]
     }
+  ],
+  "connections": {
+    "Dev Input": {
+      "main": [
+        [
+          {
+            "node": "Git Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Git Intelligence": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Git Logic",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Git Logic": {
+      "main": [
+        [
+          {
+            "node": "Parse Git Logic JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "emma-repaired-2026-05-15",
+  "id": "GITHUB_ENGINE_V700"
 }

@@ -1,62 +1,76 @@
 {
-    "name": "VECTOR_MEMORY_ENGINE_V700",
-    "nodes": [
-        {
-            "parameters": {
-                "workflowInputs": {
-                    "values": [
-                        {
-                            "name": "text",
-                            "type": "string"
-                        }
-                    ]
-                }
+  "name": "VECTOR_MEMORY_ENGINE_V700",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "text",
+              "type": "string"
             },
-            "id": "trigger",
-            "name": "Execute Input",
-            "type": "n8n-nodes-base.executeWorkflowTrigger",
-            "typeVersion": 1,
-            "position": [
-                240,
-                300
-            ]
-        },
-        {
-            "parameters": {
-                "operation": "executeQuery",
-                "query": "SELECT * FROM interaction_memory ORDER BY created_at DESC LIMIT 5;",
-                "options": {}
+            {
+              "name": "engine",
+              "type": "string"
             },
-            "id": "postgres",
-            "name": "Vector Context Access",
-            "type": "n8n-nodes-base.postgres",
-            "typeVersion": 2,
-            "position": [
-                460,
-                300
-            ],
-            "credentials": {
-                "postgres": {
-                    "id": "q2sycFRoxqP47oRY",
-                    "name": "Postgres account"
-                }
+            {
+              "name": "source",
+              "type": "string"
             }
+          ]
         }
-    ],
-    "connections": {
-        "trigger": {
-            "main": [
-                [
-                    {
-                        "node": "postgres",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        }
+      },
+      "id": "trigger",
+      "name": "Execute Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
     },
-    "settings": {
-        "executionOrder": "v1"
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM interaction_memory ORDER BY created_at DESC LIMIT 5;",
+        "options": {}
+      },
+      "id": "postgres",
+      "name": "Vector Context Access",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "q2sycFRoxqP47oRY",
+          "name": "Postgres account"
+        }
+      },
+      "continueOnFail": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
     }
+  ],
+  "connections": {
+    "Execute Input": {
+      "main": [
+        [
+          {
+            "node": "Vector Context Access",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "emma-repaired-2026-05-15",
+  "id": "VECTOR_MEMORY_ENGINE_V700"
 }
