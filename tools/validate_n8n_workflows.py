@@ -150,6 +150,12 @@ for required_path in [Path(".env.n8n.example"), Path("docs/WAS_DU_JETZT_MACHEN_S
     if not required_path.exists():
         err(str(required_path), "missing operator quickstart artifact")
 
+# Secret scanner sanity: prevent accidental commits of raw provider tokens.
+if not Path("tools/scan_secrets.py").exists():
+    err("tools/scan_secrets.py", "missing secret scanner")
+if not Path("docs/SECURITY_INCIDENT_RESPONSE.md").exists():
+    err("docs/SECURITY_INCIDENT_RESPONSE.md", "missing leaked-secret response runbook")
+
 if ERRORS:
     print("Validation failed:", file=sys.stderr)
     for item in ERRORS:

@@ -13,12 +13,13 @@ Ohne diese Werte hätte ein automatischer Import keinen autorisierten Zielserver
 
 ## Was du jetzt konkret machen sollst
 
-1. Öffne n8n und erstelle einen API-Key.
-2. Kopiere `.env.n8n.example` zu `.env.n8n`.
-3. Trage in `.env.n8n` deine echte `N8N_BASE_URL` und deinen echten `N8N_API_KEY` ein.
-4. Starte zuerst den Dry-run.
-5. Wenn der Dry-run die 36 Workflows findet, starte `--apply`.
-6. Prüfe danach in n8n die Credentials und aktiviere erst dann mit `--activate`.
+1. Falls Keys irgendwo gepostet wurden: zuerst rotieren/löschen. Nie echte Secrets in Chat oder Git verwenden.
+2. Öffne n8n und erstelle einen neuen API-Key.
+3. Kopiere `.env.n8n.example` zu `.env.n8n`.
+4. Trage in `.env.n8n` deine echte `N8N_BASE_URL` und deinen neuen echten `N8N_API_KEY` ein.
+5. Starte zuerst Secret-Scan und Dry-run.
+6. Wenn der Dry-run die Workflows findet, starte `--apply`.
+7. Prüfe danach in n8n die Credentials und aktiviere erst dann mit `--activate`.
 
 ## Automatischer Import per API
 

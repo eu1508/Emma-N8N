@@ -2,6 +2,10 @@
 
 Du musst nicht weiter raten. Das ist der konkrete Ablauf:
 
+## 0. Wichtig: gepostete Keys rotieren
+
+Wenn du echte API-Keys oder n8n Tokens in Chat/Logs gepostet hast, musst du sie zuerst in den jeweiligen Dashboards löschen und neu erstellen. Verwende gepostete Keys nicht weiter. Siehe `docs/SECURITY_INCIDENT_RESPONSE.md`.
+
 ## 1. API-Key in n8n holen
 
 Öffne deine n8n-Instanz und erstelle einen API-Key mit Workflow-Rechten. Ohne diesen Key kann kein Tool sicher in deine Cloud schreiben.
@@ -19,9 +23,10 @@ N8N_BASE_URL=https://dalino.app.n8n.cloud
 N8N_API_KEY=n8n_api_DEIN_ECHTER_KEY
 ```
 
-## 3. Erst Dry-run ausführen
+## 3. Erst Secret-Scan und Dry-run ausführen
 
 ```bash
+python3 tools/scan_secrets.py
 python3 tools/deploy_n8n_bundle.py
 ```
 
