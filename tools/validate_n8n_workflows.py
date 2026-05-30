@@ -145,6 +145,11 @@ else:
         if required not in deploy_text:
             err("tools/deploy_n8n_bundle.py", f"deployment helper missing {required!r}")
 
+# Operator quickstart sanity: keep the next-action docs and env template available.
+for required_path in [Path(".env.n8n.example"), Path("docs/WAS_DU_JETZT_MACHEN_SOLLT.md")]:
+    if not required_path.exists():
+        err(str(required_path), "missing operator quickstart artifact")
+
 if ERRORS:
     print("Validation failed:", file=sys.stderr)
     for item in ERRORS:

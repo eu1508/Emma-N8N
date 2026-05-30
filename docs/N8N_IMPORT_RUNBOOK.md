@@ -11,6 +11,15 @@ Ich kann lokale JSON-Dateien bearbeiten und validieren. In deine laufende n8n-In
 
 Ohne diese Werte hätte ein automatischer Import keinen autorisierten Zielserver und wäre unsicher.
 
+## Was du jetzt konkret machen sollst
+
+1. Öffne n8n und erstelle einen API-Key.
+2. Kopiere `.env.n8n.example` zu `.env.n8n`.
+3. Trage in `.env.n8n` deine echte `N8N_BASE_URL` und deinen echten `N8N_API_KEY` ein.
+4. Starte zuerst den Dry-run.
+5. Wenn der Dry-run die 36 Workflows findet, starte `--apply`.
+6. Prüfe danach in n8n die Credentials und aktiviere erst dann mit `--activate`.
+
 ## Automatischer Import per API
 
 Dry-run:
@@ -19,7 +28,15 @@ Dry-run:
 python3 tools/deploy_n8n_bundle.py
 ```
 
-Live-Bindung:
+Live-Bindung mit `.env.n8n`:
+
+```bash
+cp .env.n8n.example .env.n8n
+# .env.n8n bearbeiten und echten API-Key eintragen
+python3 tools/deploy_n8n_bundle.py --apply
+```
+
+Alternative ohne Datei:
 
 ```bash
 export N8N_BASE_URL="https://dalino.app.n8n.cloud"

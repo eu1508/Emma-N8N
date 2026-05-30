@@ -28,6 +28,17 @@ def workflow_files() -> list[Path]:
     return sorted(files, key=lambda path: (json.loads(path.read_text(encoding="utf-8")).get("name") == MASTER_NAME, path.name))
 
 
+def load_env_file(path: Path) -> None:
+    if not path.exists():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, value = stripped.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
 def load_workflow(path: Path) -> dict[str, Any]:
     data = json.loads(path.read_text(encoding="utf-8"))
     for key in ("id", "versionId", "triggerCount", "updatedAt", "createdAt", "shared", "tags"):
@@ -109,7 +120,9 @@ def main() -> int:
     parser.add_argument("--apply", action="store_true", help="perform API writes; otherwise only print the plan")
     parser.add_argument("--activate", action="store_true", help="activate workflows after create/update")
     parser.add_argument("--no-error-workflow", action="store_true", help="do not set METROPOLIS_ERROR_GUARDIAN as workflow error handler")
+    parser.add_argument("--env-file", default=".env.n8n", help="optional env file containing N8N_BASE_URL and N8N_API_KEY")
     args = parser.parse_args()
+    load_env_file(ROOT / args.env_file)
 
     files = workflow_files()
     workflows = [load_workflow(path) for path in files]
@@ -124,6 +137,9 @@ def main() -> int:
     api_key = os.environ.get("N8N_API_KEY")
     if not base_url or not api_key:
         print("N8N_BASE_URL and N8N_API_KEY are required with --apply.", file=sys.stderr)
+        return 2
+    if "REPLACE_ME" in api_key or api_key.strip() in {"n8n_api_...", ""}:
+        print("N8N_API_KEY still looks like a placeholder. Put your real API key in .env.n8n before --apply.", file=sys.stderr)
         return 2
 
     client = N8nClient(base_url, api_key)
