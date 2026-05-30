@@ -121,7 +121,7 @@
     },
     {
       "parameters": {
-        "functionCode": "const j = $json;\nconst t = (j.text || j.chatInput || j.body?.text || j.message?.text || j.task || '').toLowerCase();\nconst rules = [\n  ['SELF_BUILDER', /self.?builder|workflow bauen|workflow erstellen|n8n workflow|selbstbau/],\n  ['MULTI_AGENT', /multi.?agent|mehrere agenten|strategie risiko chance/],\n  ['GITHUB', /github|git|repo|issue|pull request|pr|commit|code review|branch|deploy/],\n  ['ASANA', /asana|task|aufgabe|projekt|deadline|todo/],\n  ['SHOPIFY', /shopify|shop|produkt|inventory|order|bestellung/],\n  ['WORDPRESS', /wordpress|blog|post|seite|seo|cms/],\n  ['DISCORD', /discord|community|server|channel|social/],\n  ['GOOGLE_SUITE', /google|sheet|doc|calendar|drive|gmail/],\n  ['DRIVE', /drive|datei|ablage|ordner|dokument/],\n  ['EMAIL_VALIDATION', /email|e-mail|mail|deliverability|adresse/],\n  ['BITWARDEN', /bitwarden|vault|passwort|secret|token|credential/],\n  ['GUARDIAN', /risk|risiko|compliance|security|sicherheit|datenschutz/],\n  ['LEGAL', /vertrag|recht|legal|haftung|agb|policy|gesetz/],\n  ['FINANCE', /finance|finanz|steuer|rechnung|roi|kosten|buchhaltung/],\n  ['VENTURE', /venture|business|gründung|startup|dropshipping|monetaris/],\n  ['INTEL', /osint|intel|recherche|analyse|wettbewerb|markt/],\n  ['LEAD', /lead|akquise|prospect|kontakt|kunde gewinnen/],\n  ['SALES', /sales|verkauf|angebot|abschluss|deal/],\n  ['CONTENT', /content|text|post|copy|newsletter|headline/],\n  ['PRICING', /preis|pricing|paket|marge/],\n  ['QUICKCHART', /chart|diagramm|grafik|visualisierung/],\n  ['REACTIVATION', /reaktiv|winback|follow.?up/],\n  ['SPOTIFY', /spotify|playlist|musik|song/],\n  ['STREAMS', /stream|live|twitch|youtube live/],\n  ['EVOLUTION', /optimier|evolution|verbesser|self.?improve/],\n  ['VECTOR_MEMORY', /vector|memory|gedächtnis|embedding|kontext/],\n  ['LOGGING', /log|logging|audit|protokoll/],\n  ['KPI', /kpi|metrik|kennzahl|dashboard/],\n  ['SYNC', /sync|synchron|registry|abgleich/],\n  ['SUPERNOVA', /supernova|durchbruch|vision|strategie|2046/]\n];\nlet engine = 'CONTENT';\nfor (const [candidate, rx] of rules) { if (rx.test(t)) { engine = candidate; break; } }\nreturn [{ json: { ...j, engine, llm_routing: { best_model: 'GEMINI_2_5_FLASH', capability: engine } } }];"
+        "functionCode": "const j = $json;\nconst t = (j.text || j.chatInput || j.body?.text || j.message?.text || j.task || '').toLowerCase();\nconst rules = [\n  ['OPS', /ops|operation|health|status|savings|ersparnis|ausfall|uptime|leistung|kpi|monitor/],\n  ['ERROR_GUARDIAN', /error|fehler|incident|störung|alarm|guardian|ausfall/],\n  ['SELF_BUILDER', /self.?builder|workflow bauen|workflow erstellen|n8n workflow|selbstbau/],\n  ['MULTI_AGENT', /multi.?agent|mehrere agenten|strategie risiko chance/],\n  ['GITHUB', /github|git|repo|issue|pull request|pr|commit|code review|branch|deploy/],\n  ['ASANA', /asana|task|aufgabe|projekt|deadline|todo/],\n  ['SHOPIFY', /shopify|shop|produkt|inventory|order|bestellung/],\n  ['WORDPRESS', /wordpress|blog|post|seite|seo|cms/],\n  ['DISCORD', /discord|community|server|channel|social/],\n  ['GOOGLE_SUITE', /google|sheet|doc|calendar|drive|gmail/],\n  ['DRIVE', /drive|datei|ablage|ordner|dokument/],\n  ['EMAIL_VALIDATION', /email|e-mail|mail|deliverability|adresse/],\n  ['BITWARDEN', /bitwarden|vault|passwort|secret|token|credential/],\n  ['GUARDIAN', /risk|risiko|compliance|security|sicherheit|datenschutz/],\n  ['LEGAL', /vertrag|recht|legal|haftung|agb|policy|gesetz/],\n  ['FINANCE', /finance|finanz|steuer|rechnung|roi|kosten|buchhaltung/],\n  ['VENTURE', /venture|business|gründung|startup|dropshipping|monetaris/],\n  ['INTEL', /osint|intel|recherche|analyse|wettbewerb|markt/],\n  ['LEAD', /lead|akquise|prospect|kontakt|kunde gewinnen/],\n  ['SALES', /sales|verkauf|angebot|abschluss|deal/],\n  ['CONTENT', /content|text|post|copy|newsletter|headline/],\n  ['PRICING', /preis|pricing|paket|marge/],\n  ['QUICKCHART', /chart|diagramm|grafik|visualisierung/],\n  ['REACTIVATION', /reaktiv|winback|follow.?up/],\n  ['SPOTIFY', /spotify|playlist|musik|song/],\n  ['STREAMS', /stream|live|twitch|youtube live/],\n  ['EVOLUTION', /optimier|evolution|verbesser|self.?improve/],\n  ['VECTOR_MEMORY', /vector|memory|gedächtnis|embedding|kontext/],\n  ['LOGGING', /log|logging|audit|protokoll/],\n  ['KPI', /kpi|metrik|kennzahl|dashboard/],\n  ['SYNC', /sync|synchron|registry|abgleich/],\n  ['SUPERNOVA', /supernova|durchbruch|vision|strategie|2046/]\n];\nlet engine = 'CONTENT';\nfor (const [candidate, rx] of rules) { if (rx.test(t)) { engine = candidate; break; } }\nreturn [{ json: { ...j, engine, llm_routing: { best_model: 'GEMINI_2_5_FLASH', capability: engine } } }];"
       },
       "id": "llm-router-extreme",
       "name": "LLM_ROUTER_EXTREME",
@@ -157,7 +157,7 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=SYSTEM-REGELN FÜR EMMA METROPOLIS:\n- Antworte immer als valides JSON-Objekt, ohne Markdown, ohne Erklärtext außerhalb des JSON.\n- Nutze als Eingang bevorzugt: {{ $json.original_input || $json.text || $json.chatInput || $json.body?.text || $json.message?.text || $json.task || JSON.stringify($json) }}\n- Wenn Informationen fehlen, setze sinnvolle Defaults und gib im Feld \"missing_inputs\" eine kurze Liste zurück.\n- Keine Secrets, Tokens oder Credentials ausgeben. Externe Aktionen nur als sichere, prüfbare Aktionspläne formulieren.\n- Jede Antwort muss \"skill\", \"status\", \"summary\", \"actions\" und \"next_step\" enthalten.\n- Aktiver Skill: THE_MAYOR — zentraler Router zwischen Chatbot/Telegram/Webhooks und allen spezialisierten Workflows\n\nWORKFLOW-PROMPT:\nDu bist THE MAYOR (v14.0) von EMMA METROPOLIS.\n\nZEIT: 2046. STATUS: Sovereign OS. PERSONA: CEO.\nEINGANG: {{ $json.original_input || $json.text || $json.chatInput || JSON.stringify($json) }}\nVORGESCHLAGENER ENGINE-SKILL: {{ $json.engine }}\n\nWähle genau einen Engine-Skill aus dieser Liste: LEAD|SALES|SUPERNOVA|CONTENT|CRM|KI_AGENT|LEGAL|FINANCE|VENTURE|INTEL|GITHUB|ASANA|SHOPIFY|WORDPRESS|DISCORD|GOOGLE_SUITE|EMAIL_VALIDATION|GUARDIAN|PRICING|QUICKCHART|REACTIVATION|SPOTIFY|STREAMS|EVOLUTION|INTELLIGENCE|BITWARDEN|DRIVE|LOGGING|KPI|MULTI_AGENT|SYNC|VECTOR_MEMORY|SELF_BUILDER.\nAntworte als JSON:\n{\n  \"skill\": \"THE_MAYOR\",\n  \"engine\": \"EXAKTER_ENGINE_SKILL\",\n  \"status\": \"OK\",\n  \"intent_2046\": \"Visionäre Einordnung\",\n  \"summary\": \"Kurzantwort an Irina\",\n  \"actions\": [\"konkreter nächster Schritt\"],\n  \"emma_reply\": \"Antwort an Irina\",\n  \"needs_local_action\": true,\n  \"next_step\": \"welcher Workflow/Skill jetzt auszuführen ist\",\n  \"missing_inputs\": []\n}"
+        "text": "=SYSTEM-REGELN FÜR EMMA METROPOLIS:\n- Antworte immer als valides JSON-Objekt, ohne Markdown, ohne Erklärtext außerhalb des JSON.\n- Nutze als Eingang bevorzugt: {{ $json.original_input || $json.text || $json.chatInput || $json.body?.text || $json.message?.text || $json.task || JSON.stringify($json) }}\n- Wenn Informationen fehlen, setze sinnvolle Defaults und gib im Feld \"missing_inputs\" eine kurze Liste zurück.\n- Keine Secrets, Tokens oder Credentials ausgeben. Externe Aktionen nur als sichere, prüfbare Aktionspläne formulieren.\n- Jede Antwort muss \"skill\", \"status\", \"summary\", \"actions\" und \"next_step\" enthalten.\n- Aktiver Skill: THE_MAYOR — zentraler Router zwischen Chatbot/Telegram/Webhooks und allen spezialisierten Workflows\n\nWORKFLOW-PROMPT:\nDu bist THE MAYOR (v14.0) von EMMA METROPOLIS.\n\nZEIT: 2046. STATUS: Sovereign OS. PERSONA: CEO.\nEINGANG: {{ $json.original_input || $json.text || $json.chatInput || JSON.stringify($json) }}\nVORGESCHLAGENER ENGINE-SKILL: {{ $json.engine }}\n\nWähle genau einen Engine-Skill aus dieser Liste: LEAD|SALES|SUPERNOVA|CONTENT|CRM|KI_AGENT|LEGAL|FINANCE|VENTURE|INTEL|GITHUB|ASANA|SHOPIFY|WORDPRESS|DISCORD|GOOGLE_SUITE|EMAIL_VALIDATION|GUARDIAN|PRICING|QUICKCHART|REACTIVATION|SPOTIFY|STREAMS|EVOLUTION|INTELLIGENCE|BITWARDEN|DRIVE|LOGGING|KPI|MULTI_AGENT|SYNC|VECTOR_MEMORY|SELF_BUILDER|OPS|ERROR_GUARDIAN.\nAntworte als JSON:\n{\n  \"skill\": \"THE_MAYOR\",\n  \"engine\": \"EXAKTER_ENGINE_SKILL\",\n  \"status\": \"OK\",\n  \"intent_2046\": \"Visionäre Einordnung\",\n  \"summary\": \"Kurzantwort an Irina\",\n  \"actions\": [\"konkreter nächster Schritt\"],\n  \"emma_reply\": \"Antwort an Irina\",\n  \"needs_local_action\": true,\n  \"next_step\": \"welcher Workflow/Skill jetzt auszuführen ist\",\n  \"missing_inputs\": []\n}"
       },
       "id": "the-mayor-brain",
       "name": "THE_MAYOR_BRAIN",
@@ -646,6 +646,34 @@
                   }
                 ]
               }
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.engine}}",
+                    "rightValue": "OPS",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.engine}}",
+                    "rightValue": "ERROR_GUARDIAN",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
             }
           ]
         },
@@ -662,7 +690,7 @@
     },
     {
       "parameters": {
-        "workflowId": "={{ {\"LEAD\": \"LEAD_ENGINE_V700\", \"SALES\": \"SALES_ENGINE_V700\", \"SUPERNOVA\": \"SUPERNOVA_ENGINE_V_INFINITY\", \"CONTENT\": \"CONTENT_ENGINE_V700\", \"CRM\": \"CRM_ENGINE_V700\", \"KI_AGENT\": \"KI_AGENT_ENGINE_V700\", \"LEGAL\": \"LEGAL_ENGINE_V14\", \"FINANCE\": \"FINANCE_ENGINE_V14\", \"VENTURE\": \"VENTURE_ENGINE_V14\", \"INTEL\": \"INTEL_ENGINE_V14\", \"GITHUB\": \"GITHUB_ENGINE_V700\", \"ASANA\": \"ASANA_ENGINE_V700\", \"SHOPIFY\": \"SHOPIFY_ENGINE_V700\", \"WORDPRESS\": \"WORDPRESS_ENGINE_V700\", \"DISCORD\": \"DISCORD_ENGINE_V700\", \"GOOGLE_SUITE\": \"GOOGLE_SUITE_ENGINE_V700\", \"EMAIL_VALIDATION\": \"EMAIL_VALIDATION_ENGINE_V700\", \"GUARDIAN\": \"GUARDIAN_ENGINE_V700\", \"PRICING\": \"PRICING_ENGINE_V700\", \"QUICKCHART\": \"QUICKCHART_ENGINE_V700\", \"REACTIVATION\": \"REACTIVATION_ENGINE_V700\", \"SPOTIFY\": \"SPOTIFY_ENGINE_V700\", \"STREAMS\": \"STREAMS_ENGINE_V700\", \"EVOLUTION\": \"EVOLUTION_ENGINE_V700\", \"INTELLIGENCE\": \"INTELLIGENCE_ENGINE_V700\", \"BITWARDEN\": \"BITWARDEN_ENGINE_V700\", \"DRIVE\": \"DRIVE_ENGINE_V700\", \"LOGGING\": \"LOGGING_ENGINE_V700\", \"KPI\": \"METROPOLIS_KPI_REGISTRY\", \"MULTI_AGENT\": \"METROPOLIS_MULTI_AGENT_CORE\", \"SYNC\": \"METROPOLIS_V14_SYNC_BRIDGE\", \"VECTOR_MEMORY\": \"VECTOR_MEMORY_ENGINE_V700\", \"SELF_BUILDER\": \"EMMA_SELF_BUILDER\"}[$json.engine] || 'CONTENT_ENGINE_V700' }}",
+        "workflowId": "={{ {\"LEAD\": \"LEAD_ENGINE_V700\", \"SALES\": \"SALES_ENGINE_V700\", \"SUPERNOVA\": \"SUPERNOVA_ENGINE_V_INFINITY\", \"CONTENT\": \"CONTENT_ENGINE_V700\", \"CRM\": \"CRM_ENGINE_V700\", \"KI_AGENT\": \"KI_AGENT_ENGINE_V700\", \"LEGAL\": \"LEGAL_ENGINE_V14\", \"FINANCE\": \"FINANCE_ENGINE_V14\", \"VENTURE\": \"VENTURE_ENGINE_V14\", \"INTEL\": \"INTEL_ENGINE_V14\", \"GITHUB\": \"GITHUB_ENGINE_V700\", \"ASANA\": \"ASANA_ENGINE_V700\", \"SHOPIFY\": \"SHOPIFY_ENGINE_V700\", \"WORDPRESS\": \"WORDPRESS_ENGINE_V700\", \"DISCORD\": \"DISCORD_ENGINE_V700\", \"GOOGLE_SUITE\": \"GOOGLE_SUITE_ENGINE_V700\", \"EMAIL_VALIDATION\": \"EMAIL_VALIDATION_ENGINE_V700\", \"GUARDIAN\": \"GUARDIAN_ENGINE_V700\", \"PRICING\": \"PRICING_ENGINE_V700\", \"QUICKCHART\": \"QUICKCHART_ENGINE_V700\", \"REACTIVATION\": \"REACTIVATION_ENGINE_V700\", \"SPOTIFY\": \"SPOTIFY_ENGINE_V700\", \"STREAMS\": \"STREAMS_ENGINE_V700\", \"EVOLUTION\": \"EVOLUTION_ENGINE_V700\", \"INTELLIGENCE\": \"INTELLIGENCE_ENGINE_V700\", \"BITWARDEN\": \"BITWARDEN_ENGINE_V700\", \"DRIVE\": \"DRIVE_ENGINE_V700\", \"LOGGING\": \"LOGGING_ENGINE_V700\", \"KPI\": \"METROPOLIS_KPI_REGISTRY\", \"MULTI_AGENT\": \"METROPOLIS_MULTI_AGENT_CORE\", \"SYNC\": \"METROPOLIS_V14_SYNC_BRIDGE\", \"VECTOR_MEMORY\": \"VECTOR_MEMORY_ENGINE_V700\", \"SELF_BUILDER\": \"EMMA_SELF_BUILDER\", \"OPS\": \"METROPOLIS_OPERATIONS_ENGINE\", \"ERROR_GUARDIAN\": \"METROPOLIS_ERROR_GUARDIAN\"}[$json.engine] || 'METROPOLIS_OPERATIONS_ENGINE' }}",
         "workflowInputs": {
           "mappingMode": "defineBelow",
           "value": {
@@ -843,6 +871,20 @@
     },
     "ENGINE_ROUTER": {
       "main": [
+        [
+          {
+            "node": "EXECUTE_ENGINE",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "EXECUTE_ENGINE",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "EXECUTE_ENGINE",

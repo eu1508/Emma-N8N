@@ -2,12 +2,13 @@
 
 ## Designentscheidung nach Review
 
-Der vorherige Stand war als JSON-Bundle syntaktisch sauber, aber für echte n8n-Ausführung gab es vier Laufzeit-Risiken:
+Der vorherige Stand war als JSON-Bundle syntaktisch sauber, aber für echte n8n-Ausführung gab es fünf Laufzeit-Risiken:
 
 1. **Sub-Workflow-Aufrufe brauchen stabile Workflow-IDs.** Der Master-Orchestrator darf nicht nur auf sichtbare Canvas-Namen hoffen. Deshalb besitzt jetzt jeder Export eine stabile `id`, die identisch zum Workflow-Namen ist.
 2. **LLM-Ausgaben sind nicht automatisch JSON-Felder.** Basic LLM Chain Nodes liefern typischerweise Text. Deshalb folgt auf jede LLM Chain ein Parser-Node, der Markdown-Fences entfernt, JSON extrahiert und Felder wie `business_model`, `legal_status` oder `strategic_breakthrough` wieder als `$json` verfügbar macht.
 3. **Datenbank-Nodes dürfen den Gesamtfluss nicht hart stoppen.** SQLite/Postgres benötigen externe Credentials und Tabellen. Deshalb laufen DB-Nodes mit Retry und `continueOnFail`; lokale SQLite-Workflows legen Kern-Tabellen per `CREATE TABLE IF NOT EXISTS` an.
 4. **Placeholder-Skills dürfen nicht nur NoOp sein.** Bitwarden und Drive geben jetzt strukturierte, sichere Aktionspläne zurück, auch wenn noch keine externen Schreib-Credentials verbunden sind.
+5. **Betrieb braucht Messbarkeit.** `METROPOLIS_OPERATIONS_ENGINE` berechnet Health-Score und geschätzte EUR-Ersparnis; `METROPOLIS_ERROR_GUARDIAN` fängt Fehlerereignisse ab und schreibt nicht-sensitive Incident-Daten.
 
 ## Was weiterhin extern konfiguriert sein muss
 
@@ -33,6 +34,7 @@ Das Tool `tools/validate_n8n_workflows.py` prüft:
 - Webhooks sind `POST`
 - Datenbank-Nodes haben `continueOnFail`
 - `Execute Workflow`-Mappings verweisen auf Workflows, die im Bundle existieren
+- OPS/Error-Guardian sind in `skills.sh` registriert
 
 ## Workflow-Abdeckung
 
@@ -40,6 +42,8 @@ Das Tool `tools/validate_n8n_workflows.py` prüft:
 | --- | --- | --- |
 | `EMMA_MASTER_ORCHESTRATOR` | Omnichannel Intake, Routing, Sub-Workflow-Ausführung | Skill-Router, stabile Workflow-ID-Map, Originalinput-Weitergabe |
 | `METROPOLIS_MULTI_AGENT_CORE` | Strategie/Risiko/Chance | Execute Trigger, Gemini 2.5, JSON-Parser je Agent |
+| `METROPOLIS_OPERATIONS_ENGINE` | Health, Leistungsnachweis, Ersparnis | Health-Score, EUR-Savings, KPI-Speicherung |
+| `METROPOLIS_ERROR_GUARDIAN` | Ausfall-/Fehlerbehandlung | Error Trigger, Incident-Normalisierung, nicht-blockierendes Error-Logging |
 | `EMMA_SELF_BUILDER` | Workflow-Generierung | Analyse-/Generate-Parser, DB/API-Nodes tolerant gegen externe Fehler |
 | `GITHUB_ENGINE_V700` | GitHub-Issues/Reviews/Repo-Audit planen | JSON-Vertrag, Modellverkabelung, Parser |
 | `ASANA_ENGINE_V700` | Aufgaben/Projektsteuerung | Execute Trigger, Modellverkabelung, Parser |
@@ -80,3 +84,5 @@ Das Tool `tools/validate_n8n_workflows.py` prüft:
 3. Im Master-Orchestrator `EXECUTE_ENGINE` prüfen: Wenn n8n beim Import neue IDs vergibt, die Mapping-Werte auf diese IDs ändern.
 4. Jeden Sub-Workflow einmal direkt mit `{ "text": "health check", "engine": "...", "source": "manual" }` ausführen.
 5. Danach den Master-Orchestrator mit je einem Keyword pro Engine testen.
+6. `METROPOLIS_OPERATIONS_ENGINE` regelmäßig mit echten Ausführungszahlen (`runs`, `manual_minutes`, `automation_minutes`, `hourly_rate_eur`) triggern, damit die angezeigte Ersparnis realistisch bleibt.
+7. `METROPOLIS_ERROR_GUARDIAN` als Error Workflow in n8n aktivieren, damit Fehlerereignisse zentral protokolliert werden.

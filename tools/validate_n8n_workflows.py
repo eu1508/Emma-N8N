@@ -113,10 +113,27 @@ for workflow_path in sorted(glob.glob("*.json")):
         if node.get("type") != "n8n-nodes-base.executeWorkflow":
             continue
         workflow_id = node.get("parameters", {}).get("workflowId", "")
-        mentioned = set(re.findall(r'"([A-Z0-9_]+(?:_ENGINE(?:_V700|_V14|_V_INFINITY)?|_CORE|_REGISTRY|_BRIDGE|SELF_BUILDER))"', workflow_id))
+        mentioned: set[str] = set()
+        if "[$json.engine]" in workflow_id:
+            try:
+                mapping_text = workflow_id.split("={{ ", 1)[1].split("[$json.engine]", 1)[0].strip()
+                mapping = json.loads(mapping_text)
+                mentioned.update(str(value) for value in mapping.values())
+            except Exception as exc:  # pragma: no cover - defensive validator branch
+                err(workflow_path, f"execute workflow node {node.get('name')!r} has unparsable workflowId mapping: {exc}")
+        else:
+            mentioned.update(re.findall(r'"([A-Z][A-Z0-9_]+)"', workflow_id))
         missing = sorted(item for item in mentioned if item not in workflow_ids and item not in workflow_names)
         if missing:
             err(workflow_path, f"execute workflow node {node.get('name')!r} references unknown workflows: {missing}")
+
+# Skill registry sanity: operational guardrails must be routable from shell helpers too.
+skills_path = Path("skills.sh")
+if skills_path.exists():
+    skills_text = skills_path.read_text(encoding="utf-8")
+    for expected_skill in ["OPS=METROPOLIS_OPERATIONS_ENGINE", "ERROR_GUARDIAN=METROPOLIS_ERROR_GUARDIAN"]:
+        if expected_skill not in skills_text:
+            err("skills.sh", f"missing skill registry entry {expected_skill!r}")
 
 if ERRORS:
     print("Validation failed:", file=sys.stderr)
