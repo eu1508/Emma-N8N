@@ -22,6 +22,7 @@
           "name": "telegram"
         }
       },
+      "disabled": true,
       "webhookId": "5240feb8-043b-513a-b596-1fd7b7d69a18"
     },
     {

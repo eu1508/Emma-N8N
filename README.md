@@ -1,5 +1,10 @@
 # EMMA / Metropolis – n8n Workflows
 
+> **Status: GEBAUT, nicht LIVE.** Die Dateien sind geprüft (Validator, Syntax, Logik mit Testdaten), aber noch nicht
+> in der produktiven n8n-Instanz (self-hosted, Ubuntu-VM auf der Synology, `100.79.103.114:5678`) ausgeführt worden.
+> Der Telegram-Eingang des Orchestrators und der Herzschlag des Cognitive Loop sind **absichtlich deaktiviert**,
+> bis die Fragen unter „Vor dem Aktivieren klären“ entschieden sind.
+
 Früher waren es über 70 Workflows, viele davon doppelt, und die meisten liefen nicht. Jetzt sind es **8**:
 
 | Workflow | Zweck |
@@ -46,15 +51,14 @@ den Austausch mit Jarvis und Irinas Termine. Dann entscheidet sie selbst, was si
 Alles, was Geld kostet, nach außen geht, Kunden kontaktiert oder nicht rückgängig zu machen ist, läuft über `request_approval`.
 Das entspricht dem früheren Council-500-Standard.
 
-### Gedächtnis: Postgres → Google Drive → Synology
+### Gedächtnis: Postgres → Google Drive
 
 - Die Quelle ist Postgres (`emma_memory`, `emma_agenda`, `emma_cycles`, `agent_dialogue`, …).
 - Nach jedem Denkzyklus schreibt Emma ihr komplettes Gedächtnis nach **Google Drive** in die bestehende
   `EMMA_memory.json` im EMMA-Ordner. Das Format ist wie bisher (`goals`, `decisions`, `strategies`, `learnings`, `tasks`, `conversations`, …),
   ergänzt um `agenda_mit_irina`, `jarvis_dialogue`, `last_thoughts` und `next_wake`.
-- **Synology:** n8n läuft in der Cloud (`dalino.app.n8n.cloud`) und kommt nicht direkt ins Heimnetz (`192.168.178.x`).
-  Deshalb auf der Synology **Cloud Sync** für den Google-Drive-Ordner einrichten, dann liegt das Gedächtnis automatisch auch dort.
-  Alternativ gibt es den Node „An Synology senden (optional)“. Er ist deaktiviert und braucht eine von außen erreichbare Adresse.
+- Für die Synology gibt es den deaktivierten Node „An Synology senden (optional)“. Er bekommt die Adresse, sobald
+  feststeht, welches System dort das Gedächtnis führt (siehe unten).
 
 ## Jarvis (`EMMA_JARVIS`)
 
@@ -73,14 +77,31 @@ Wichtige Hinweise von Jarvis landen in Emmas Gedächtnis.
 
 | Bot | n8n-Credential | Genutzt von |
 |---|---|---|
-| EMMA WORLDMASTER OS | `telegram` | Orchestrator, Cognitive Loop, Daily Report |
+| EMMA WORLDMASTER OS (@WorldMaster_Bot) | `telegram` | Orchestrator, Cognitive Loop, Daily Report |
 | Jarvis (eigener Bot) | `telegram 2` | `EMMA_JARVIS` (Node ist bis zur Zuordnung deaktiviert) |
 | Worldmaster Nor-Bot, Nova, Alpha_trade_bot | – | eigene Systeme, hier nicht verwendet |
 
-Prüfe beim Import, dass `telegram` wirklich der Token von **EMMA WORLDMASTER OS** ist, z. B. in n8n mit „Test“ oder über
-`https://api.telegram.org/bot<TOKEN>/getMe`. Pro Bot darf nur **ein** aktiver Workflow einen Telegram-Trigger haben.
+Die Dateien `telegram.txt` und `telegram 2.txt` in „Emma Wichtig !“ sind leer. Das ist richtig so, Tokens gehören nur in
+die n8n-Credentials. Prüfe beim Import, dass die Credential `telegram` wirklich @WorldMaster_Bot ist, z. B. in n8n mit „Test“.
+Pro Bot darf nur **ein** Empfänger aktiv sein (siehe „Vor dem Aktivieren klären“).
 
 **Befehle an Emma:** `/agenda` (Themen, Aufgaben, Freigaben) · `/ok 12` · `/nein 12` · `/erledigt 7`
+
+## Vor dem Aktivieren klären
+
+Laut `EMMA_ARCHITECTURE.md` und `N8N_WORKFLOW_KARTE.md` (Stand 14.–23.09.2026) gibt es schon mehrere Systeme,
+die dasselbe tun wollen:
+
+1. **Ein Haupteingang für @WorldMaster_Bot.** Schon heute lesen `emma-telegram-worker` (emma-core-os) und
+   `EMMA_SUPERNOVA_METROPOLE_BACKOFFICE_V?` (`CEO_TELEGRAM_IN`) Telegram mit. Ein Bot kann aber nur **einen** Empfänger haben:
+   Webhook und Polling schließen sich aus, zwei Empfänger bedeuten Doppelantworten oder verlorene Nachrichten.
+   Erst entscheiden, wer antwortet. Danach `CEO_TELEGRAM_IN` hier nur aktivieren, wenn es dieser Orchestrator sein soll.
+2. **Eine Wahrheit für Gedächtnis, Aufgaben und Freigaben.** emma-core-os hat eine eigene Postgres-Datenbank (Port 5434) mit Memory,
+   Tasks und Approval-Gate. Die Tabellen in `schema.sql` dürfen keine zweite, abweichende Wahrheit werden. Entweder
+   zeigt die Postgres-Credential in n8n auf **dieselbe** Datenbank wie core-os (Tabellen abgleichen), oder der Cognitive Loop
+   ruft die core-os-API statt eigener Tabellen auf.
+3. **Jarvis:** Laut `JARVIS_LAB_STATE.json` gibt es schon einen Jarvis als Mentor in core-os (nur lesend, unter Quarantäne).
+   `EMMA_JARVIS` hier ist ein reiner n8n-Berater ohne eigene Aktionen. Entscheiden, ob beide gewollt sind oder ob Emma den core-os-Jarvis fragen soll.
 
 ## Einrichten
 
@@ -91,11 +112,14 @@ Prüfe beim Import, dass `telegram` wirklich der Token von **EMMA WORLDMASTER OS
    - Orchestrator: `EXECUTE_ENGINE` → `EMMA_ENGINE_HUB`, `EXECUTE_JARVIS` → `EMMA_JARVIS`
    - Cognitive Loop: `Engine ausführen` → `EMMA_ENGINE_HUB`, `Jarvis fragen` → `EMMA_JARVIS`
 4. Alte Workflows erst deaktivieren und nach ein paar Tagen löschen (siehe unten).
-5. Aktivieren: Orchestrator, Cognitive Loop, Daily Report, Data Gateway (Engine Hub und Jarvis laufen als Sub-Workflows mit).
+5. Erst nach der Klärung oben: `CEO_TELEGRAM_IN` und „Herzschlag (15 min)“ aktivieren, dann die Workflows aktiv schalten.
+   Engine Hub und Jarvis laufen als Sub-Workflows mit.
 
 ## Alte Workflows: was wo weiterlebt
 
-Das stammt aus `ALL_WORKFLOWS_BACKUP.json` (Stand Mai). Was dort nicht auftaucht, bitte vor dem Löschen kurz prüfen.
+Das stammt aus `ALL_WORKFLOWS_BACKUP.json` (Stand Mai, 75 Workflows). Live laufen laut `N8N_WORKFLOW_KARTE.md` (14.09.)
+237 Workflows, davon 35 aktiv. Namen aus dem Backup gelten sinngemäß auch für die gleichnamigen Live-Workflows, aber:
+**nichts löschen, was nicht in dieser Liste steht, und vorher in n8n exportieren.**
 
 **Übernommen, danach löschen:**
 

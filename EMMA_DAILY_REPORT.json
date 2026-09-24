@@ -44,7 +44,7 @@
     },
     {
       "parameters": {
-        "url": "https://dalino.app.n8n.cloud/api/v1/executions",
+        "url": "http://localhost:5678/api/v1/executions",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendQuery": true,
@@ -81,7 +81,7 @@
     },
     {
       "parameters": {
-        "url": "https://dalino.app.n8n.cloud/api/v1/workflows",
+        "url": "http://localhost:5678/api/v1/workflows",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendQuery": true,

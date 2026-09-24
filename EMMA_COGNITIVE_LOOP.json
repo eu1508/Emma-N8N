@@ -19,7 +19,8 @@
       "position": [
         0,
         300
-      ]
+      ],
+      "disabled": true
     },
     {
       "parameters": {
