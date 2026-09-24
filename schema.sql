@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS interaction_memory (
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 ALTER TABLE interaction_memory ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
+ALTER TABLE interaction_memory ADD COLUMN IF NOT EXISTS output text;   -- Emmas Antwort, für Gesprächsgedächtnis
+CREATE INDEX IF NOT EXISTS interaction_memory_user_idx ON interaction_memory (user_id, created_at);
 
 -- Jeder Lauf des EMMA_ENGINE_HUB (ersetzt die vielen *_ENGINE-Workflows).
 CREATE TABLE IF NOT EXISTS engine_runs (
@@ -96,3 +98,47 @@ CREATE TABLE IF NOT EXISTS self_modification_log (
   reasoning          text,
   created_at         timestamptz NOT NULL DEFAULT now()
 );
+
+-- ---------------------------------------------------------------- Emmas inneres Leben
+-- Langzeitgedächtnis (wird nach jedem Denkzyklus als EMMA_memory.json nach Google Drive exportiert).
+CREATE TABLE IF NOT EXISTS emma_memory (
+  id          bigserial PRIMARY KEY,
+  category    text NOT NULL,          -- goals | decisions | strategies | market_intel | learnings | people | preferences
+  content     text NOT NULL,
+  importance  int NOT NULL DEFAULT 3, -- 1 (Detail) … 5 (zentral)
+  source      text,                   -- CHAT | SELF | JARVIS
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS emma_memory_rank_idx ON emma_memory (importance DESC, created_at DESC);
+
+-- Themen, die Emma mit Irina besprechen möchte.
+CREATE TABLE IF NOT EXISTS emma_agenda (
+  id          bigserial PRIMARY KEY,
+  topic       text NOT NULL,
+  reason      text,
+  status      text NOT NULL DEFAULT 'open',   -- open | done
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  done_at     timestamptz
+);
+
+-- Jeder Denkzyklus von EMMA_COGNITIVE_LOOP.
+CREATE TABLE IF NOT EXISTS emma_cycles (
+  id            bigserial PRIMARY KEY,
+  mode          text,                 -- MORNING | EVENING | WAKE | MANUAL
+  wake_events   jsonb,
+  thoughts      text,
+  actions       jsonb,
+  next_wake_at  timestamptz,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+
+-- Gespräche zwischen EMMA, JARVIS und IRINA.
+CREATE TABLE IF NOT EXISTS agent_dialogue (
+  id          bigserial PRIMARY KEY,
+  from_agent  text NOT NULL,
+  to_agent    text NOT NULL,
+  message     text,
+  meta        jsonb,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS agent_dialogue_created_idx ON agent_dialogue (created_at);

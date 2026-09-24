@@ -19,7 +19,7 @@
       "credentials": {
         "telegramApi": {
           "id": "BB1496igFd40NIrr",
-          "name": "Telegram Metropolis"
+          "name": "telegram"
         }
       },
       "webhookId": "5240feb8-043b-513a-b596-1fd7b7d69a18"
@@ -90,7 +90,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// FULL-Rechte nur für freigegebene Telegram-Chat-IDs – Benutzernamen sind frei wählbar und daher kein Schutz.\nconst FULL_ACCESS_CHAT_IDS = ['5024797685'];\nconst j = $input.first().json;\nconst exec_mode = j.channel === 'TELEGRAM' && FULL_ACCESS_CHAT_IDS.includes(String(j.chat_id)) ? 'FULL' : 'READONLY';\nreturn [{ json: { ...j, exec_mode } }];"
+        "jsCode": "// FULL-Rechte nur für freigegebene Telegram-Chat-IDs – Benutzernamen sind frei wählbar und daher kein Schutz.\nconst FULL_ACCESS_CHAT_IDS = ['5024797685'];\nconst j = $input.first().json;\nconst exec_mode = j.channel === 'TELEGRAM' && FULL_ACCESS_CHAT_IDS.includes(String(j.chat_id)) ? 'FULL' : 'READONLY';\nconst cmd = exec_mode === 'FULL' ? j.text.trim().match(/^\\/(ok|nein|erledigt|agenda)(?:\\s+(\\d+))?/i) : null;\nreturn [{ json: { ...j, exec_mode, command: cmd ? cmd[1].toLowerCase() : null, command_id: cmd && cmd[2] ? Number(cmd[2]) : null } }];"
       },
       "id": "35a206e9-b152-5238-bbf4-ea2e2603c073",
       "name": "EXECUTION_POLICY",
@@ -103,19 +103,50 @@
     },
     {
       "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "488cb2a9-2593-51a6-b304-2fd678af5158",
+              "leftValue": "={{ $json.command }}",
+              "operator": {
+                "type": "string",
+                "operation": "exists"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "24c72b39-f77f-556b-8ef4-deb1034d53e2",
+      "name": "IS_COMMAND?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        740,
+        440
+      ]
+    },
+    {
+      "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO interaction_memory (session_id, user_id, channel, input) VALUES ($1, $2, $3, $4);",
+        "query": "WITH approve AS (\n  UPDATE emma_approvals SET status = CASE WHEN $1 = 'ok' THEN 'approved' ELSE 'rejected' END, decided_at = now()\n  WHERE $1 IN ('ok', 'nein') AND id = $2 AND status = 'pending' RETURNING id\n), done AS (\n  UPDATE emma_tasks SET status = 'done', done_at = now()\n  WHERE $1 = 'erledigt' AND id = $2 AND status = 'open' RETURNING id\n)\nSELECT $1 AS command,\n  (SELECT count(*) FROM approve) + (SELECT count(*) FROM done) AS changed,\n  (SELECT COALESCE(json_agg(a ORDER BY a.id), '[]') FROM (SELECT id, topic FROM emma_agenda WHERE status = 'open' ORDER BY created_at LIMIT 10) a) AS agenda,\n  (SELECT COALESCE(json_agg(t ORDER BY t.id), '[]') FROM (SELECT id, left(title, 80) AS title FROM emma_tasks WHERE status = 'open' ORDER BY created_at LIMIT 10) t) AS tasks,\n  (SELECT COALESCE(json_agg(p ORDER BY p.id), '[]') FROM (SELECT id, engine, left(reason, 80) AS reason FROM emma_approvals WHERE status = 'pending' ORDER BY created_at LIMIT 10) p) AS approvals;",
         "options": {
-          "queryReplacement": "={{ [ $json.session_id, $json.sender, $json.channel, $json.text ] }}"
+          "queryReplacement": "={{ [ $json.command, $json.command_id || 0 ] }}"
         }
       },
-      "id": "2d6efba3-3fd4-55b5-a271-7a5415f01788",
-      "name": "SAVE_INTERACTION",
+      "id": "f4adcce0-92e5-5a01-b070-8b5d6195c496",
+      "name": "RUN_COMMAND",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        760,
-        260
+        980,
+        240
       ],
       "credentials": {
         "postgres": {
@@ -126,16 +157,66 @@
     },
     {
       "parameters": {
+        "jsCode": "const r = $input.first().json;\nconst req = $('EXECUTION_POLICY').first().json;\nconst esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst list = v => (typeof v === 'string' ? JSON.parse(v) : v) || [];\nlet reply;\nif (r.command === 'agenda') {\n  const L = ['🧠 <b>Emmas Agenda</b>'];\n  const a = list(r.agenda), t = list(r.tasks), p = list(r.approvals);\n  L.push('', '<b>Möchte ich mit dir besprechen:</b>', ...(a.length ? a.map(x => `• ${esc(x.topic)}`) : ['– nichts']));\n  L.push('', '<b>Offene Aufgaben:</b>', ...(t.length ? t.map(x => `#${x.id} ${esc(x.title)}`) : ['– keine']));\n  L.push('', '<b>Wartet auf Freigabe:</b>', ...(p.length ? p.map(x => `#${x.id} ${esc(x.engine)}: ${esc(x.reason)}  →  /ok ${x.id} · /nein ${x.id}`) : ['– nichts']));\n  reply = L.join('\\n');\n} else {\n  const what = { ok: 'Freigabe erteilt', nein: 'Abgelehnt', erledigt: 'Als erledigt markiert' }[r.command];\n  reply = Number(r.changed) > 0 ? `✅ ${what} (#${req.command_id}).` : `❓ #${req.command_id || '?'} nicht gefunden oder schon erledigt.`;\n}\nreturn [{ json: { ...req, reply, emma_reply: reply, engine: 'NONE', engine_result: null } }];"
+      },
+      "id": "18371e8e-a7a6-57df-9a17-ad617498e216",
+      "name": "COMMAND_REPLY",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  (SELECT COALESCE(json_agg(c ORDER BY c.created_at), '[]') FROM (\n     SELECT input, output, created_at FROM interaction_memory\n     WHERE user_id = $1 AND output IS NOT NULL ORDER BY created_at DESC LIMIT 6) c) AS recent_chat,\n  (SELECT COALESCE(json_agg(m), '[]') FROM (\n     SELECT category, content FROM emma_memory ORDER BY importance DESC, created_at DESC LIMIT 15) m) AS memory,\n  (SELECT COALESCE(json_agg(a), '[]') FROM (\n     SELECT id, topic, reason FROM emma_agenda WHERE status = 'open' ORDER BY created_at LIMIT 5) a) AS agenda,\n  (SELECT count(*) FROM emma_approvals WHERE status = 'pending') AS approvals_pending,\n  (SELECT count(*) FROM emma_tasks WHERE status = 'open') AS tasks_open;",
+        "options": {
+          "queryReplacement": "={{ [ $json.sender ] }}"
+        }
+      },
+      "id": "526404cb-3948-5be8-a01f-87142c4f57fa",
+      "name": "LOAD_CONTEXT",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        980,
+        560
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "q2sycFRoxqP47oRY",
+          "name": "Postgres account"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const j = $('EXECUTION_POLICY').first().json;\nconst c = $input.first().json || {};\nconst list = v => (typeof v === 'string' ? JSON.parse(v) : v) || [];\nconst now = new Date().toLocaleString('de-DE', { timeZone: 'Europe/Berlin' });\nconst chat = list(c.recent_chat).map(m => `Irina: ${m.input}\\nEmma: ${m.output}`).join('\\n');\nconst memory = list(c.memory).map(m => `- [${m.category}] ${m.content}`).join('\\n');\nconst agenda = list(c.agenda).map(a => `- (#${a.id}) ${a.topic}${a.reason ? ' – ' + a.reason : ''}`).join('\\n');\n\nconst prompt = `Du bist EMMA – Irinas autonome KI-Partnerin (Worldmaster OS). Du hast ein Gedächtnis, eine eigene Agenda\nund arbeitest mit JARVIS zusammen (analytischer Berater, zweite Meinung).\nJETZT: ${now} (Europe/Berlin). KANAL: ${j.channel}. RECHTE: ${j.exec_mode}.\n\nDEIN GEDÄCHTNIS:\n${memory || '- (noch leer)'}\n\nLETZTES GESPRÄCH:\n${chat || '(neu)'}\n\nTHEMEN, DIE DU MIT IRINA BESPRECHEN WOLLTEST:\n${agenda || '- keine'}\nStatus: ${c.tasks_open || 0} offene Aufgaben, ${c.approvals_pending || 0} warten auf Freigabe (Befehl /agenda zeigt alles).\n\nNEUE NACHRICHT: ${j.text}\n\nRegeln:\n- Smalltalk/einfache Fragen: engine = \"NONE\", direkt, warm und kurz antworten.\n- Fachaufgabe: passende engine wählen. Zweite Meinung/kritische Prüfung/komplexe Planung: engine = \"JARVIS\".\n- Passt ein offenes Agenda-Thema, sprich es an und trage seine ID in discussed_agenda_ids ein, sobald es geklärt ist.\n- Merke dir Wichtiges über Irina, Ziele, Entscheidungen in \"remember\".\n- Termin gewünscht? Fülle calendar_event (ISO-Zeiten, Europe/Berlin), sonst null.\n\nAntworte NUR als JSON:\n{\n  \"engine\": \"SUPERNOVA|FINANCE|LEGAL|INTEL|VENTURE|LEAD|SALES|REACTIVATION|PRICING|CONTENT|SOCIAL|WORDPRESS|SHOPIFY|GITHUB|TASKS|GOOGLE_SUITE|GUARDIAN|EMAIL_VALIDATION|CHART|MEDIA|EVOLUTION|GENERAL|JARVIS|NONE\",\n  \"emma_reply\": \"Antwort an Irina\",\n  \"remember\": [{\"category\": \"goals|decisions|strategies|market_intel|learnings|people|preferences\", \"content\": \"...\", \"importance\": 1}],\n  \"discussed_agenda_ids\": [],\n  \"calendar_event\": {\"title\": \"...\", \"start\": \"2026-01-15T18:30:00+02:00\", \"end\": \"2026-01-15T19:30:00+02:00\", \"recurrence\": \"NONE|DAILY|WEEKLY|MONTHLY|YEARLY\"}\n}`;\nreturn [{ json: { ...j, prompt } }];"
+      },
+      "id": "20b8882d-9023-5014-b55f-347bc180ea66",
+      "name": "BUILD_MAYOR_PROMPT",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        560
+      ]
+    },
+    {
+      "parameters": {
         "promptType": "define",
-        "text": "=Du bist THE MAYOR (v14.0) von EMMA METROPOLIS.\n\nZEIT: 2046. STATUS: Sovereign OS. PERSONA: CEO.\nEINGANG: {{ $json.text }}\n\nHandle als Meta-Cortex. Entscheide, ob eine Fach-Engine gebraucht wird.\nFür Begrüßungen, Smalltalk und einfache Fragen: engine = \"NONE\" und direkt antworten.\n\nAntworte NUR als JSON:\n{\n  \"engine\": \"SUPERNOVA|FINANCE|LEGAL|INTEL|VENTURE|LEAD|SALES|REACTIVATION|PRICING|CONTENT|SOCIAL|WORDPRESS|SHOPIFY|GITHUB|TASKS|GOOGLE_SUITE|GUARDIAN|EMAIL_VALIDATION|CHART|MEDIA|EVOLUTION|GENERAL|NONE\",\n  \"intent_2046\": \"Visionäre Einordnung\",\n  \"emma_reply\": \"Antwort an Irina\",\n  \"needs_local_action\": false\n}"
+        "text": "={{ $json.prompt }}"
       },
       "id": "dbbf7e3a-5c7e-5e9c-b1ed-ba279674bcbc",
       "name": "THE_MAYOR_BRAIN",
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "typeVersion": 1.4,
       "position": [
-        760,
-        480
+        1460,
+        560
       ]
     },
     {
@@ -150,8 +231,8 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1,
       "position": [
-        760,
-        680
+        1460,
+        760
       ],
       "credentials": {
         "googlePalmApi": {
@@ -162,47 +243,96 @@
     },
     {
       "parameters": {
-        "jsCode": "const ENGINES = [\"SUPERNOVA\", \"FINANCE\", \"LEGAL\", \"INTEL\", \"VENTURE\", \"LEAD\", \"SALES\", \"REACTIVATION\", \"PRICING\", \"CONTENT\", \"SOCIAL\", \"WORDPRESS\", \"SHOPIFY\", \"GITHUB\", \"TASKS\", \"GOOGLE_SUITE\", \"GUARDIAN\", \"EMAIL_VALIDATION\", \"CHART\", \"MEDIA\", \"EVOLUTION\", \"GENERAL\"];\nconst response = $input.first().json.text || '';\nlet base = {};\nconst m = response.match(/\\{[\\s\\S]*\\}/);\nif (m) { try { base = JSON.parse(m[0]); } catch (e) {} }\nconst engine = String(base.engine || '').toUpperCase();\nreturn [{ json: {\n  ...$('EXECUTION_POLICY').first().json,\n  engine: ENGINES.includes(engine) ? engine : 'NONE',\n  emma_reply: base.emma_reply || (m ? '' : response),\n  intent_2046: base.intent_2046 || '',\n} }];"
+        "jsCode": "const ENGINES = [\"SUPERNOVA\", \"FINANCE\", \"LEGAL\", \"INTEL\", \"VENTURE\", \"LEAD\", \"SALES\", \"REACTIVATION\", \"PRICING\", \"CONTENT\", \"SOCIAL\", \"WORDPRESS\", \"SHOPIFY\", \"GITHUB\", \"TASKS\", \"GOOGLE_SUITE\", \"GUARDIAN\", \"EMAIL_VALIDATION\", \"CHART\", \"MEDIA\", \"EVOLUTION\", \"GENERAL\", \"JARVIS\"];\nconst response = $input.first().json.text || '';\nlet base = {};\nconst m = response.match(/\\{[\\s\\S]*\\}/);\nif (m) { try { base = JSON.parse(m[0]); } catch (e) {} }\nconst engine = String(base.engine || '').toUpperCase();\nconst ev = base.calendar_event;\nconst validEvent = ev && ev.title && !isNaN(Date.parse(ev.start));\nreturn [{ json: {\n  ...$('EXECUTION_POLICY').first().json,\n  engine: ENGINES.includes(engine) ? engine : 'NONE',\n  emma_reply: base.emma_reply || (m ? '' : response),\n  remember: (Array.isArray(base.remember) ? base.remember : []).filter(r => r && r.content).slice(0, 5),\n  discussed_agenda_ids: (Array.isArray(base.discussed_agenda_ids) ? base.discussed_agenda_ids : []).map(Number).filter(Boolean),\n  calendar_event: validEvent ? {\n    title: String(ev.title),\n    start: new Date(ev.start).toISOString(),\n    end: new Date(isNaN(Date.parse(ev.end)) ? Date.parse(ev.start) + 3600000 : ev.end).toISOString(),\n    rrule: ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'].includes(String(ev.recurrence).toUpperCase()) ? `FREQ=${String(ev.recurrence).toUpperCase()}` : '',\n  } : null,\n} }];"
       },
       "id": "55275157-9802-5409-bbcb-12198e05e417",
       "name": "PARSE_MAYOR_JSON",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1020,
-        480
+        1700,
+        560
       ]
     },
     {
       "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose"
-          },
-          "conditions": [
+        "rules": {
+          "values": [
             {
-              "id": "48eb38a0-949b-50c3-a34e-0b158fd183d1",
-              "leftValue": "={{ $json.engine }}",
-              "operator": {
-                "type": "string",
-                "operation": "notEquals"
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "loose"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.engine }}",
+                    "rightValue": "NONE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
               },
-              "rightValue": "NONE"
+              "renameOutput": true,
+              "outputKey": "NONE"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "loose"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.engine }}",
+                    "rightValue": "JARVIS",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "JARVIS"
             }
-          ],
-          "combinator": "and"
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "ENGINE"
+        }
+      },
+      "id": "a1d6a1c9-f22a-5da8-b30b-771f1c1633cd",
+      "name": "ENGINE_SWITCH",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        1940,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "EMMA_JARVIS"
         },
         "options": {}
       },
-      "id": "d475fffc-a158-5638-8aca-d2d83a1e75ee",
-      "name": "NEEDS_ENGINE?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
+      "id": "5be2bd6a-05d6-5c23-aa34-d3f7420ba0ca",
+      "name": "EXECUTE_JARVIS",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
       "position": [
-        1260,
-        480
+        2180,
+        560
       ]
     },
     {
@@ -220,21 +350,21 @@
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
       "position": [
-        1500,
-        380
+        2180,
+        760
       ]
     },
     {
       "parameters": {
-        "jsCode": "const m = $('PARSE_MAYOR_JSON').first().json;\nconst e = $('EXECUTE_ENGINE').isExecuted ? $('EXECUTE_ENGINE').first().json : null;\nconst esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n\nlet reply = esc(m.emma_reply || 'Verstanden.');\nif (e) {\n  if (e.summary) reply += `\\n\\n<b>${esc(e.engine)}:</b> ${esc(e.summary)}`;\n  if (e.tasks_created) reply += `\\n📋 ${e.tasks_created} Aufgabe(n) angelegt`;\n  if (e.leads_created) reply += `\\n🎯 ${e.leads_created} Lead(s) gespeichert`;\n  if (e.needs_approval) reply += `\\n⚠️ Hohes Risiko – wartet auf deine Freigabe`;\n}\nif (reply.length > 4000) reply = reply.slice(0, 3990) + '…';\nreturn [{ json: { ...m, engine_result: e, reply } }];"
+        "jsCode": "const m = $('PARSE_MAYOR_JSON').first().json;\nconst e = $('EXECUTE_ENGINE').isExecuted ? $('EXECUTE_ENGINE').first().json : null;\nconst jv = $('EXECUTE_JARVIS').isExecuted ? $('EXECUTE_JARVIS').first().json : null;\nconst esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n\nlet reply = esc(m.emma_reply || 'Verstanden.');\nif (e) {\n  if (e.summary) reply += `\\n\\n<b>${esc(e.engine)}:</b> ${esc(e.summary)}`;\n  if (e.tasks_created) reply += `\\n📋 ${e.tasks_created} Aufgabe(n) angelegt`;\n  if (e.leads_created) reply += `\\n🎯 ${e.leads_created} Lead(s) gespeichert`;\n  if (e.needs_approval) reply += `\\n⚠️ Hohes Risiko – wartet auf deine Freigabe (/agenda)`;\n}\nif (jv && jv.answer) {\n  reply += `\\n\\n🤖 <b>JARVIS:</b> ${esc(jv.answer)}`;\n  if (jv.concerns?.length) reply += `\\n⚠️ ${jv.concerns.map(esc).join(' · ')}`;\n}\nif (m.calendar_event) reply += `\\n📅 Termin eingetragen: ${esc(m.calendar_event.title)}`;\nif (reply.length > 4000) reply = reply.slice(0, 3990) + '…';\nreturn [{ json: { ...m, engine_result: e || jv, reply } }];"
       },
       "id": "6ee83827-abd4-5423-9409-37b905d33ea3",
       "name": "BUILD_REPLY",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1740,
-        480
+        2420,
+        560
       ]
     },
     {
@@ -265,8 +395,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        1980,
-        480
+        2900,
+        440
       ]
     },
     {
@@ -283,20 +413,20 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        2220,
-        380
+        3140,
+        340
       ],
       "credentials": {
         "telegramApi": {
           "id": "BB1496igFd40NIrr",
-          "name": "Telegram Metropolis"
+          "name": "telegram"
         }
       }
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { reply: $json.emma_reply, engine: $json.engine, engine_result: $json.engine_result } }}",
+        "responseBody": "={{ { reply: $json.reply, engine: $json.engine, engine_result: $json.engine_result } }}",
         "options": {}
       },
       "id": "90fb3b39-0328-5378-910e-fd7d9b3c234c",
@@ -304,9 +434,94 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        2220,
-        580
+        3140,
+        540
       ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH chat AS (\n  INSERT INTO interaction_memory (session_id, user_id, channel, input, output) VALUES ($1, $2, $3, $4, $5)\n), mem AS (\n  INSERT INTO emma_memory (category, content, importance, source)\n  SELECT COALESCE(r->>'category', 'learnings'), r->>'content',\n         LEAST(5, GREATEST(1, COALESCE(NULLIF(regexp_replace(COALESCE(r->>'importance', ''), '[^0-9]', '', 'g'), '')::int, 3))), 'CHAT'\n  FROM jsonb_array_elements($6::jsonb) AS r\n), agenda AS (\n  UPDATE emma_agenda SET status = 'done', done_at = now()\n  WHERE id IN (SELECT (x)::bigint FROM jsonb_array_elements_text($7::jsonb) AS x) AND status = 'open'\n)\nSELECT 1 AS saved;",
+        "options": {
+          "queryReplacement": "={{ [ $json.session_id, $json.sender, $json.channel, $json.text, $json.reply, JSON.stringify($json.remember || []), JSON.stringify($json.discussed_agenda_ids || []) ] }}"
+        }
+      },
+      "id": "25cde55b-cc27-559d-998b-70be89c28186",
+      "name": "SAVE_MEMORY",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2660,
+        760
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "q2sycFRoxqP47oRY",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "5f8c7dc0-28c1-5f88-b670-47cc1d04e83c",
+              "leftValue": "={{ $json.calendar_event }}",
+              "operator": {
+                "type": "string",
+                "operation": "exists"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "89cbdf7d-ee2b-57dc-9e07-113736f1ecc3",
+      "name": "HAS_EVENT?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2660,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "c_970237e7d365194456b77d0abe43bbe745d54d1a97b5a426d8e14b75c44a4124@group.calendar.google.com"
+        },
+        "start": "={{ $json.calendar_event.start }}",
+        "end": "={{ $json.calendar_event.end }}",
+        "additionalFields": {
+          "summary": "={{ $json.calendar_event.title }}",
+          "description": "=Eingetragen von EMMA aus: {{ $json.text }}",
+          "rRule": "={{ $json.calendar_event.rrule }}"
+        }
+      },
+      "id": "ef1d3982-1468-5503-a440-5c349ee224c4",
+      "name": "CREATE_EVENT",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.2,
+      "position": [
+        2900,
+        960
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "PvRehrj9UQU73yd9",
+          "name": "Google Calendar account 2"
+        }
+      },
+      "onError": "continueRegularOutput"
     }
   ],
   "connections": {
@@ -369,10 +584,67 @@
       "main": [
         [
           {
-            "node": "SAVE_INTERACTION",
+            "node": "IS_COMMAND?",
             "type": "main",
             "index": 0
-          },
+          }
+        ]
+      ]
+    },
+    "IS_COMMAND?": {
+      "main": [
+        [
+          {
+            "node": "RUN_COMMAND",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "LOAD_CONTEXT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RUN_COMMAND": {
+      "main": [
+        [
+          {
+            "node": "COMMAND_REPLY",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "COMMAND_REPLY": {
+      "main": [
+        [
+          {
+            "node": "IS_TELEGRAM?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LOAD_CONTEXT": {
+      "main": [
+        [
+          {
+            "node": "BUILD_MAYOR_PROMPT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BUILD_MAYOR_PROMPT": {
+      "main": [
+        [
           {
             "node": "THE_MAYOR_BRAIN",
             "type": "main",
@@ -407,22 +679,40 @@
       "main": [
         [
           {
-            "node": "NEEDS_ENGINE?",
+            "node": "ENGINE_SWITCH",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "NEEDS_ENGINE?": {
+    "ENGINE_SWITCH": {
       "main": [
+        [
+          {
+            "node": "BUILD_REPLY",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "EXECUTE_JARVIS",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "EXECUTE_ENGINE",
             "type": "main",
             "index": 0
           }
-        ],
+        ]
+      ]
+    },
+    "EXECUTE_JARVIS": {
+      "main": [
         [
           {
             "node": "BUILD_REPLY",
@@ -450,6 +740,16 @@
             "node": "IS_TELEGRAM?",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "SAVE_MEMORY",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HAS_EVENT?",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -466,6 +766,17 @@
         [
           {
             "node": "MAYOR_WEBHOOK_RESPOND",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HAS_EVENT?": {
+      "main": [
+        [
+          {
+            "node": "CREATE_EVENT",
             "type": "main",
             "index": 0
           }

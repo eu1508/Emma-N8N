@@ -1,0 +1,1068 @@
+{
+  "name": "EMMA_COGNITIVE_LOOP",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "9f81267a-9a72-5408-a3e7-6ac0ddccbcd7",
+      "name": "Herzschlag (15 min)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "e1c77784-4932-51bf-9031-84f6386f3280",
+      "name": "Manuell wecken",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "c_970237e7d365194456b77d0abe43bbe745d54d1a97b5a426d8e14b75c44a4124@group.calendar.google.com"
+        },
+        "limit": 20,
+        "options": {
+          "timeMin": "={{ $now.minus({ minutes: 15 }).toISO() }}",
+          "timeMax": "={{ $now.plus({ minutes: 1 }).toISO() }}",
+          "singleEvents": true,
+          "orderBy": "startTime"
+        }
+      },
+      "id": "94ac0d81-7ec8-5890-9d4e-1dd76ddd350f",
+      "name": "Weckzeiten im EMMA-Kalender",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        400
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "PvRehrj9UQU73yd9",
+          "name": "Google Calendar account 2"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Emma wacht auf: morgens 07:00, abends 21:30, zu jedem Termin im EMMA-Kalender – oder wenn man sie weckt.\nconst now = Date.now();\nconst berlin = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Berlin' }));\nconst hm = berlin.getHours() * 60 + berlin.getMinutes();\nconst events = $('Weckzeiten im EMMA-Kalender').all().map(i => i.json)\n  .filter(e => e.id && e.start?.dateTime)\n  .filter(e => { const t = Date.parse(e.start.dateTime); return t > now - 15 * 60000 && t <= now + 60000; });\n\nlet mode = null;\nif (hm >= 7 * 60 && hm < 7 * 60 + 15) mode = 'MORNING';\nelse if (hm >= 21 * 60 + 30 && hm < 21 * 60 + 45) mode = 'EVENING';\nelse if (events.length) mode = 'WAKE';\nif ($('Manuell wecken').isExecuted) mode = mode || 'MANUAL';\nif (!mode) return [];\n\nreturn [{ json: {\n  mode,\n  wake_events: events.map(e => ({ title: e.summary || '', description: e.description || '', start: e.start.dateTime })),\n  manual_reason: $('Manuell wecken').isExecuted ? String($('Manuell wecken').first().json.reason || '') : '',\n} }];"
+      },
+      "id": "6d399215-39d0-5186-bc7c-d8d2d9c122aa",
+      "name": "Aufwachen?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  (SELECT COALESCE(json_agg(t), '[]') FROM (SELECT id, title, source_engine, created_at::date AS since FROM emma_tasks WHERE status = 'open' ORDER BY created_at LIMIT 15) t) AS tasks,\n  (SELECT COALESCE(json_agg(a), '[]') FROM (SELECT id, engine, left(reason, 120) AS reason, created_at::date AS since FROM emma_approvals WHERE status = 'pending' ORDER BY created_at LIMIT 10) a) AS approvals,\n  (SELECT COALESCE(json_agg(g), '[]') FROM (SELECT id, topic FROM emma_agenda WHERE status = 'open' ORDER BY created_at LIMIT 10) g) AS agenda,\n  (SELECT COALESCE(json_agg(c ORDER BY c.created_at), '[]') FROM (SELECT left(input, 200) AS input, left(output, 200) AS output, created_at FROM interaction_memory WHERE created_at > now() - interval '24 hours' ORDER BY created_at DESC LIMIT 10) c) AS recent_chat,\n  (SELECT COALESCE(json_agg(m), '[]') FROM (SELECT id, category, content FROM emma_memory ORDER BY importance DESC, created_at DESC LIMIT 30) m) AS memory,\n  (SELECT COALESCE(json_agg(d ORDER BY d.created_at), '[]') FROM (SELECT from_agent, to_agent, left(message, 400) AS message, created_at FROM agent_dialogue WHERE (from_agent = 'JARVIS' OR to_agent = 'JARVIS') AND created_at > now() - interval '3 days' ORDER BY created_at DESC LIMIT 6) d) AS jarvis,\n  (SELECT COALESCE(json_agg(y ORDER BY y.created_at), '[]') FROM (SELECT mode, left(thoughts, 300) AS thoughts, created_at FROM emma_cycles ORDER BY created_at DESC LIMIT 3) y) AS last_cycles,\n  (SELECT count(*) FROM agent_dialogue WHERE from_agent = 'EMMA' AND to_agent = 'IRINA' AND created_at >= (date_trunc('day', now() AT TIME ZONE 'Europe/Berlin') AT TIME ZONE 'Europe/Berlin')) AS messages_today,\n  (SELECT count(*) FROM engine_runs WHERE created_at > now() - interval '24 hours' AND status <> 'ok') AS failed_runs_24h,\n  (SELECT min(next_wake_at) FROM emma_cycles WHERE next_wake_at > now()) AS next_planned_wake;",
+        "options": {}
+      },
+      "id": "770f4dfa-418e-5e4f-b5fa-4485286dcc86",
+      "name": "Kontext laden",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        720,
+        400
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "q2sycFRoxqP47oRY",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "info@dalinowellness.de"
+        },
+        "limit": 15,
+        "options": {
+          "timeMin": "={{ $now.toISO() }}",
+          "timeMax": "={{ $now.plus({ hours: 24 }).toISO() }}",
+          "singleEvents": true,
+          "orderBy": "startTime"
+        }
+      },
+      "id": "d7fa8d64-07c2-5f23-a6d4-89017b94cde5",
+      "name": "Irinas Termine (24h)",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.2,
+      "position": [
+        960,
+        400
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "PvRehrj9UQU73yd9",
+          "name": "Google Calendar account 2"
+        }
+      },
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const w = $('Aufwachen?').first().json;\nconst c = $('Kontext laden').first().json;\nconst list = v => (typeof v === 'string' ? JSON.parse(v) : v) || [];\nconst fmt = d => new Date(d).toLocaleString('de-DE', { timeZone: 'Europe/Berlin', weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });\nconst termine = $('Irinas Termine (24h)').all().map(i => i.json).filter(e => e.id)\n  .map(e => `- ${fmt(e.start?.dateTime || e.start?.date)} ${e.summary || ''}`).join('\\n');\n\nconst MODES = {\n  MORNING: 'MORGEN-ROUTINE: Plane den Tag. Schicke Irina eine kurze, warme Morgennachricht (Plan, Termine, was du besprechen willst). Setze Weckzeiten für heute.',\n  EVENING: 'ABEND-REFLEXION (Daily Evolution): Was lief heute gut/schlecht? Halte 1-3 Learnings fest, schließe Erledigtes, plane Weckzeiten für morgen. Nachricht an Irina nur, wenn wirklich wichtig.',\n  WAKE: 'GEPLANTES AUFWACHEN: Erledige, weswegen du dich geweckt hast.',\n  MANUAL: 'MANUELL GEWECKT: ' + (w.manual_reason || 'Prüfe, ob etwas zu tun ist.'),\n};\n\nconst prompt = `Du bist EMMA – Irinas autonome, kognitive KI-Partnerin (wie JARVIS für Tony Stark, aber mit eigenem Charakter).\nDu hast ein Gedächtnis, eigene Ziele, eine Agenda und einen Kalender, in den du dir selbst Weckzeiten setzt.\nJARVIS ist dein analytischer Kollege: frag ihn bei wichtigen oder unsicheren Entscheidungen nach einer zweiten Meinung.\n\nJETZT: ${fmt(new Date())}\nMODUS: ${MODES[w.mode]}\nGEWECKT DURCH: ${w.wake_events.map(e => `${e.title} – ${e.description}`).join('; ') || w.mode}\n\nGEDÄCHTNIS:\n${list(c.memory).map(m => `- (#${m.id}) [${m.category}] ${m.content}`).join('\\n') || '- (noch leer – lerne Irina kennen)'}\n\nOFFENE AUFGABEN:\n${list(c.tasks).map(t => `- #${t.id} ${t.title} (seit ${t.since})`).join('\\n') || '- keine'}\n\nWARTET AUF IRINAS FREIGABE:\n${list(c.approvals).map(a => `- #${a.id} ${a.engine}: ${a.reason}`).join('\\n') || '- nichts'}\n\nWILLST DU MIT IRINA BESPRECHEN:\n${list(c.agenda).map(a => `- #${a.id} ${a.topic}`).join('\\n') || '- nichts'}\n\nGESPRÄCHE LETZTE 24H:\n${list(c.recent_chat).map(m => `Irina: ${m.input} | Emma: ${m.output}`).join('\\n') || '- keine'}\n\nJARVIS (letzte 3 Tage):\n${list(c.jarvis).map(d => `${d.from_agent} → ${d.to_agent}: ${d.message}`).join('\\n') || '- kein Austausch'}\n\nDEINE LETZTEN GEDANKEN:\n${list(c.last_cycles).map(y => `- (${y.mode}) ${y.thoughts}`).join('\\n') || '- (erster Gedanke)'}\n\nIRINAS TERMINE (NÄCHSTE 24H):\n${termine || '- keine'}\n\nSYSTEM: ${c.failed_runs_24h} fehlgeschlagene Engine-Läufe (24h). Nächste geplante Weckzeit: ${c.next_planned_wake ? fmt(c.next_planned_wake) : 'keine'}.\nNachrichten an Irina heute: ${c.messages_today}/3.\n\nDU DARFST SELBSTSTÄNDIG (max. 6 Aktionen):\n- schedule_wake {at (ISO, Europe/Berlin), title, reason}  → Termin in deinem Kalender, dann wachst du auf\n- create_task {title} / complete_task {id}\n- add_agenda {topic, reason}  → Thema, das du mit Irina besprechen willst\n- remember {category: goals|decisions|strategies|market_intel|learnings|people|preferences, content, importance 1-5}\n- message_irina {text}  → max. 3 pro Tag, nicht zwischen 22 und 7 Uhr\n- run_engine {engine: SUPERNOVA|FINANCE|LEGAL|INTEL|VENTURE|LEAD|SALES|REACTIVATION|PRICING|CONTENT|SOCIAL|WORDPRESS|SHOPIFY|GITHUB|TASKS|GOOGLE_SUITE|GUARDIAN|EMAIL_VALIDATION|CHART|MEDIA|EVOLUTION|GENERAL, text}  → Fach-Engine arbeiten lassen\n- ask_jarvis {question}\n- request_approval {what, why}  → für alles, was Geld kostet, nach außen geht, Kunden kontaktiert oder nicht rückgängig zu machen ist\n\nAntworte NUR als JSON:\n{\n  \"thoughts\": \"Deine inneren Gedanken in 2-4 Sätzen\",\n  \"actions\": [{\"type\": \"...\", ...}]\n}`;\nreturn [{ json: { ...w, prompt, messages_today: Number(c.messages_today || 0), next_planned_wake: c.next_planned_wake } }];"
+      },
+      "id": "c24f9198-12fd-5c80-bf5d-984697b75442",
+      "name": "Gedanken vorbereiten",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.prompt }}"
+      },
+      "id": "4f6de923-b560-50f6-8ef5-fa54ea048539",
+      "name": "EMMA_DENKT",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        1440,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-pro",
+        "options": {
+          "temperature": 0.6
+        }
+      },
+      "id": "e438b29e-d82f-5bb7-bb04-de47e630437b",
+      "name": "Emma Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        600
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "U6jVg3cxRNRwbqPQ",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Leitplanken: Emma ist frei, aber nicht grenzenlos.\nconst ALLOWED = [\"schedule_wake\", \"create_task\", \"complete_task\", \"add_agenda\", \"remember\", \"message_irina\", \"run_engine\", \"ask_jarvis\", \"request_approval\"];\nconst ENGINES = [\"SUPERNOVA\", \"FINANCE\", \"LEGAL\", \"INTEL\", \"VENTURE\", \"LEAD\", \"SALES\", \"REACTIVATION\", \"PRICING\", \"CONTENT\", \"SOCIAL\", \"WORDPRESS\", \"SHOPIFY\", \"GITHUB\", \"TASKS\", \"GOOGLE_SUITE\", \"GUARDIAN\", \"EMAIL_VALIDATION\", \"CHART\", \"MEDIA\", \"EVOLUTION\", \"GENERAL\"];\nconst CATEGORIES = [\"goals\", \"decisions\", \"strategies\", \"market_intel\", \"learnings\", \"people\", \"preferences\"];\nconst ctx = $('Gedanken vorbereiten').first().json;\nconst raw = $input.first().json.text || '';\nlet out = {};\ntry { const m = raw.match(/\\{[\\s\\S]*\\}/); out = m ? JSON.parse(m[0]) : {}; } catch (e) {}\n\nconst now = Date.now();\nconst hour = Number(new Date().toLocaleString('en-US', { timeZone: 'Europe/Berlin', hour: 'numeric', hour12: false }));\nconst quiet = hour >= 22 || hour < 7;\nlet msgBudget = Math.max(0, 3 - ctx.messages_today);\nlet engineBudget = 2, wakeBudget = 3;\nconst rejected = [];\n\nconst actions = (Array.isArray(out.actions) ? out.actions : []).slice(0, 6).filter(a => {\n  if (!a || !ALLOWED.includes(a.type)) { rejected.push(a?.type); return false; }\n  switch (a.type) {\n    case 'schedule_wake': {\n      const t = Date.parse(a.at);\n      if (!(t > now + 10 * 60000 && t < now + 7 * 86400000) || wakeBudget-- <= 0) { rejected.push('schedule_wake'); return false; }\n      a.start = new Date(t).toISOString(); a.end = new Date(t + 15 * 60000).toISOString();\n      a.title = String(a.title || 'Nachdenken').slice(0, 80); a.reason = String(a.reason || '');\n      return true;\n    }\n    case 'message_irina':\n      if (quiet || msgBudget-- <= 0 || !a.text) { rejected.push('message_irina'); return false; }\n      a.text = String(a.text).slice(0, 3500); return true;\n    case 'run_engine':\n      a.engine = String(a.engine || '').toUpperCase();\n      if (!ENGINES.includes(a.engine) || engineBudget-- <= 0 || !a.text) { rejected.push('run_engine'); return false; }\n      a.sender = 'EMMA_SELF'; return true;\n    case 'remember':\n      if (!a.content) return false;\n      a.category = CATEGORIES.includes(a.category) ? a.category : 'learnings';\n      a.importance = Math.min(5, Math.max(1, Number(a.importance) || 3)); return true;\n    case 'complete_task': return Number(a.id) > 0;\n    case 'create_task': return !!a.title;\n    case 'add_agenda': return !!a.topic;\n    case 'ask_jarvis': a.asked_by = 'EMMA'; return !!a.question;\n    case 'request_approval': return !!a.what;\n  }\n});\n\n// Emma soll nie \"vergessen aufzuwachen\": ohne geplante Weckzeit tagsüber in 3 Stunden nachsehen.\nconst plansWake = actions.some(a => a.type === 'schedule_wake');\nif (!plansWake && !ctx.next_planned_wake && hour >= 7 && hour < 18) {\n  const t = now + 3 * 3600000;\n  actions.push({ type: 'schedule_wake', start: new Date(t).toISOString(), end: new Date(t + 15 * 60000).toISOString(), title: 'Routine-Check', reason: 'Automatisch: keine Weckzeit geplant' });\n}\n\nconst wakes = actions.filter(a => a.type === 'schedule_wake').map(a => a.start).sort();\nreturn [{ json: {\n  mode: ctx.mode, wake_events: ctx.wake_events,\n  thoughts: String(out.thoughts || raw.slice(0, 500)),\n  actions, rejected,\n  next_wake_at: wakes[0] || ctx.next_planned_wake || null,\n} }];"
+      },
+      "id": "557401a1-79a6-5368-94f5-63afde279e75",
+      "name": "Aktionen prüfen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.first().json.actions.map(a => ({ json: a }));"
+      },
+      "id": "85299903-cfeb-5620-9ffc-6b6b16704970",
+      "name": "Aktionen einzeln",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "loose"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "schedule_wake",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "schedule_wake"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "loose"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "create_task",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "create_task"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "loose"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "complete_task",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "complete_task"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "loose"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "add_agenda",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "add_agenda"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "loose"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "remember",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "remember"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "loose"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "message_irina",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "message_irina"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "loose"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "run_engine",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "run_engine"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "loose"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "ask_jarvis",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "ask_jarvis"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "loose"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "request_approval",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "request_approval"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d00e13ff-96d8-5d52-ad4c-80eeb6845686",
+      "name": "Aktion?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        2160,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "c_970237e7d365194456b77d0abe43bbe745d54d1a97b5a426d8e14b75c44a4124@group.calendar.google.com"
+        },
+        "start": "={{ $json.start }}",
+        "end": "={{ $json.end }}",
+        "additionalFields": {
+          "summary": "=🧠 EMMA: {{ $json.title }}",
+          "description": "={{ $json.reason }}"
+        }
+      },
+      "id": "d5d98e6c-74b2-5b13-8381-a78ee99dd623",
+      "name": "Weckzeit eintragen",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.2,
+      "position": [
+        2460,
+        -100
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "PvRehrj9UQU73yd9",
+          "name": "Google Calendar account 2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO emma_tasks (title, source_engine) VALUES ($1, 'EMMA_SELF');",
+        "options": {
+          "queryReplacement": "={{ [ $json.title ] }}"
+        }
+      },
+      "id": "a00d5f11-ece7-5b18-b6e9-172ebf897dfe",
+      "name": "Aufgabe anlegen",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2460,
+        40
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "q2sycFRoxqP47oRY",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE emma_tasks SET status = 'done', done_at = now() WHERE id = $1 AND status = 'open';",
+        "options": {
+          "queryReplacement": "={{ [ Number($json.id) ] }}"
+        }
+      },
+      "id": "2ebe957b-272c-5a5d-b121-f44bbcc0afe9",
+      "name": "Aufgabe erledigt",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2460,
+        180
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "q2sycFRoxqP47oRY",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO emma_agenda (topic, reason) VALUES ($1, $2);",
+        "options": {
+          "queryReplacement": "={{ [ $json.topic, $json.reason || '' ] }}"
+        }
+      },
+      "id": "c2d71f6e-7200-5662-8457-a03034351bba",
+      "name": "Agenda-Thema",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2460,
+        320
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "q2sycFRoxqP47oRY",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO emma_memory (category, content, importance, source) VALUES ($1, $2, $3, 'SELF');",
+        "options": {
+          "queryReplacement": "={{ [ $json.category, $json.content, $json.importance ] }}"
+        }
+      },
+      "id": "3bc4d6ca-7ebc-5eb6-a6fd-9e111b5d7bab",
+      "name": "Merken",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2460,
+        460
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "q2sycFRoxqP47oRY",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO agent_dialogue (from_agent, to_agent, message) VALUES ('EMMA', 'IRINA', $1) RETURNING message AS text;",
+        "options": {
+          "queryReplacement": "={{ [ $json.text ] }}"
+        }
+      },
+      "id": "7064ceed-fe5c-5b7d-889b-f07426fa3705",
+      "name": "Nachricht loggen",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2460,
+        600
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "q2sycFRoxqP47oRY",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "EMMA_ENGINE_HUB"
+        },
+        "options": {}
+      },
+      "id": "7451cd52-38d6-59d6-8eb8-9df1b63851dd",
+      "name": "Engine ausführen",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2460,
+        740
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "EMMA_JARVIS"
+        },
+        "options": {}
+      },
+      "id": "90855eb6-4a7a-56ec-b1ca-9849b70cff42",
+      "name": "Jarvis fragen",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2460,
+        880
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO emma_approvals (engine, reason) VALUES ('EMMA_SELF', $1) RETURNING id, reason;",
+        "options": {
+          "queryReplacement": "={{ [ $json.what + ($json.why ? ' – ' + $json.why : '') ] }}"
+        }
+      },
+      "id": "c2f85d14-2dcd-5a20-bb7e-4cb97e51d6b0",
+      "name": "Freigabe anlegen",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2460,
+        1020
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "q2sycFRoxqP47oRY",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "5024797685",
+        "text": "={{ '🧠 ' + $json.text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }}",
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "appendAttribution": false
+        }
+      },
+      "id": "3a4579f5-2c52-5d29-9264-6316d0150e5d",
+      "name": "Nachricht an Irina",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2700,
+        600
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "BB1496igFd40NIrr",
+          "name": "telegram"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "5024797685",
+        "text": "=⚠️ <b>Emma bittet um Freigabe #{{ $json.id }}</b>\n{{ $json.reason.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }}\n\n/ok {{ $json.id }}  ·  /nein {{ $json.id }}",
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "appendAttribution": false
+        }
+      },
+      "id": "c0af1ad9-b3c4-5503-bf69-4e1cab5ed2c6",
+      "name": "Freigabe anfragen",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2700,
+        1020
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "BB1496igFd40NIrr",
+          "name": "telegram"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO emma_cycles (mode, wake_events, thoughts, actions, next_wake_at) VALUES ($1, $2::jsonb, $3, $4::jsonb, $5::timestamptz);",
+        "options": {
+          "queryReplacement": "={{ [ $json.mode, JSON.stringify($json.wake_events), $json.thoughts, JSON.stringify({ done: $json.actions, rejected: $json.rejected }), $json.next_wake_at ] }}"
+        }
+      },
+      "id": "30987d77-c8cc-560c-9b71-fd038967203b",
+      "name": "Gedanken protokollieren",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1920,
+        520
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "q2sycFRoxqP47oRY",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT json_build_object(\n  'goals', (SELECT COALESCE(json_agg(json_build_object('content', content, 'importance', importance, 'ts', created_at) ORDER BY created_at), '[]') FROM emma_memory WHERE category = 'goals'),\n  'decisions', (SELECT COALESCE(json_agg(json_build_object('content', content, 'importance', importance, 'ts', created_at) ORDER BY created_at), '[]') FROM emma_memory WHERE category = 'decisions'),\n  'strategies', (SELECT COALESCE(json_agg(json_build_object('content', content, 'importance', importance, 'ts', created_at) ORDER BY created_at), '[]') FROM emma_memory WHERE category = 'strategies'),\n  'market_intel', (SELECT COALESCE(json_agg(json_build_object('content', content, 'importance', importance, 'ts', created_at) ORDER BY created_at), '[]') FROM emma_memory WHERE category = 'market_intel'),\n  'learnings', (SELECT COALESCE(json_agg(json_build_object('content', content, 'importance', importance, 'ts', created_at) ORDER BY created_at), '[]') FROM emma_memory WHERE category = 'learnings'),\n  'people', (SELECT COALESCE(json_agg(json_build_object('content', content, 'importance', importance, 'ts', created_at) ORDER BY created_at), '[]') FROM emma_memory WHERE category = 'people'),\n  'preferences', (SELECT COALESCE(json_agg(json_build_object('content', content, 'importance', importance, 'ts', created_at) ORDER BY created_at), '[]') FROM emma_memory WHERE category = 'preferences'),\n  'conversations', (SELECT COALESCE(json_agg(json_build_object('ts', created_at, 'irina', input, 'emma', output) ORDER BY created_at), '[]') FROM (SELECT * FROM interaction_memory WHERE output IS NOT NULL ORDER BY created_at DESC LIMIT 50) c),\n  'tasks', (SELECT COALESCE(json_agg(json_build_object('id', id, 'title', title, 'since', created_at) ORDER BY created_at), '[]') FROM emma_tasks WHERE status = 'open'),\n  'agenda_mit_irina', (SELECT COALESCE(json_agg(json_build_object('id', id, 'topic', topic, 'reason', reason) ORDER BY created_at), '[]') FROM emma_agenda WHERE status = 'open'),\n  'pending_approvals', (SELECT COALESCE(json_agg(json_build_object('id', id, 'reason', reason) ORDER BY created_at), '[]') FROM emma_approvals WHERE status = 'pending'),\n  'jarvis_dialogue', (SELECT COALESCE(json_agg(json_build_object('from', from_agent, 'to', to_agent, 'message', message, 'ts', created_at) ORDER BY created_at), '[]') FROM (SELECT * FROM agent_dialogue WHERE from_agent = 'JARVIS' OR to_agent = 'JARVIS' ORDER BY created_at DESC LIMIT 30) d),\n  'last_thoughts', (SELECT json_build_object('mode', mode, 'thoughts', thoughts, 'ts', created_at) FROM emma_cycles ORDER BY created_at DESC LIMIT 1),\n  'next_wake', (SELECT min(next_wake_at) FROM emma_cycles WHERE next_wake_at > now()),\n  'last_updated', now()\n) AS memory;",
+        "options": {}
+      },
+      "id": "0df6219f-1e04-53f6-966e-54225aabef5f",
+      "name": "Gedächtnis exportieren",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2160,
+        520
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "q2sycFRoxqP47oRY",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const m = $input.first().json.memory;\nreturn [{ json: typeof m === 'string' ? JSON.parse(m) : m }];"
+      },
+      "id": "178d9933-65c8-5955-9ab7-c1180ab8b116",
+      "name": "Gedächtnis-Objekt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "toJson",
+        "mode": "each",
+        "options": {
+          "fileName": "EMMA_memory.json",
+          "format": true
+        }
+      },
+      "id": "ff0accd6-6581-5cb8-bfc2-791094cdf850",
+      "name": "Als JSON-Datei",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        2640,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "fileId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "1xK0weUxCShNNkPPCNxPa5kfWnBj5P9xQ"
+        },
+        "changeFileContent": true,
+        "inputDataFieldName": "data",
+        "updateFields": {}
+      },
+      "id": "fc7d3a07-ba41-5c6a-81c0-60f26c038795",
+      "name": "In Google Drive speichern",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2880,
+        460
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "pPIrGVpsjeRmbONb",
+          "name": "Google Drive account 3"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://DEINE-SYNOLOGY-ADRESSE/api/v1/memory",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Gedächtnis-Objekt').first().json) }}",
+        "options": {}
+      },
+      "id": "ccd74f80-4523-552f-aa90-693381a6ca0c",
+      "name": "An Synology senden (optional)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2880,
+        640
+      ],
+      "disabled": true,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Herzschlag (15 min)": {
+      "main": [
+        [
+          {
+            "node": "Weckzeiten im EMMA-Kalender",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manuell wecken": {
+      "main": [
+        [
+          {
+            "node": "Weckzeiten im EMMA-Kalender",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weckzeiten im EMMA-Kalender": {
+      "main": [
+        [
+          {
+            "node": "Aufwachen?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aufwachen?": {
+      "main": [
+        [
+          {
+            "node": "Kontext laden",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kontext laden": {
+      "main": [
+        [
+          {
+            "node": "Irinas Termine (24h)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Irinas Termine (24h)": {
+      "main": [
+        [
+          {
+            "node": "Gedanken vorbereiten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gedanken vorbereiten": {
+      "main": [
+        [
+          {
+            "node": "EMMA_DENKT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Emma Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "EMMA_DENKT",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "EMMA_DENKT": {
+      "main": [
+        [
+          {
+            "node": "Aktionen prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aktionen prüfen": {
+      "main": [
+        [
+          {
+            "node": "Aktionen einzeln",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Gedanken protokollieren",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aktionen einzeln": {
+      "main": [
+        [
+          {
+            "node": "Aktion?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aktion?": {
+      "main": [
+        [
+          {
+            "node": "Weckzeit eintragen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Aufgabe anlegen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Aufgabe erledigt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Agenda-Thema",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merken",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Nachricht loggen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Engine ausführen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Jarvis fragen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Freigabe anlegen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nachricht loggen": {
+      "main": [
+        [
+          {
+            "node": "Nachricht an Irina",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Freigabe anlegen": {
+      "main": [
+        [
+          {
+            "node": "Freigabe anfragen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gedanken protokollieren": {
+      "main": [
+        [
+          {
+            "node": "Gedächtnis exportieren",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gedächtnis exportieren": {
+      "main": [
+        [
+          {
+            "node": "Gedächtnis-Objekt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gedächtnis-Objekt": {
+      "main": [
+        [
+          {
+            "node": "Als JSON-Datei",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "An Synology senden (optional)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Als JSON-Datei": {
+      "main": [
+        [
+          {
+            "node": "In Google Drive speichern",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Berlin"
+  }
+}

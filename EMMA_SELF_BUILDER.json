@@ -238,7 +238,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://n8n:5678/api/v1/workflows",
+        "url": "https://dalino.app.n8n.cloud/api/v1/workflows",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
