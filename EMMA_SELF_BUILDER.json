@@ -3,96 +3,145 @@
   "nodes": [
     {
       "parameters": {
+        "httpMethod": "POST",
         "path": "emma-self-builder",
-        "method": "POST",
-        "responseMode": "responseNode",
-        "options": {}
+        "options": {},
+        "responseMode": "responseNode"
       },
-      "id": "webhook-input",
+      "id": "b74f902b-d27e-523c-b89d-69f5ce6858c3",
       "name": "Webhook Input",
       "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1,
+      "typeVersion": 2,
       "position": [
-        240,
-        300
-      ]
+        0,
+        400
+      ],
+      "webhookId": "76b7c061-7325-5f11-9e3e-2fa0e682556c"
     },
     {
       "parameters": {
-        "functionCode": "// EMMA Self-Builder: Cognitive Architect\nconst request = $json;\n\nreturn [{\n  json: {\n    user: request.user || 'Irina',\n    task: request.task || request.message,\n    workflow_type: request.workflow_type || 'AUTO_DETECT',\n    session_id: request.session_id || $execution.id,\n    timestamp: new Date().toISOString()\n  }\n}];"
+        "jsCode": "const b = $input.first().json.body || {};\nconst task = String(b.task || b.message || '').trim();\nif (!task) throw new Error('Feld \"task\" fehlt');\nreturn [{ json: {\n  user: b.user || 'Irina', task,\n  task_key: task.toLowerCase().replace(/\\s+/g, ' '),\n  session_id: b.session_id || $execution.id,\n  timestamp: new Date().toISOString(),\n} }];"
       },
-      "id": "normalize-input",
+      "id": "f64e2af8-656f-52cb-8c06-4d963ac761b0",
       "name": "Normalize Input",
-      "type": "n8n-nodes-base.function",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
-        460,
-        300
+        220,
+        400
       ]
     },
     {
       "parameters": {
-        "modelName": "models/gemini-1.5-pro",
+        "operation": "executeQuery",
+        "query": "SELECT workflow_name FROM workflow_registry WHERE lower(regexp_replace(purpose, '\\s+', ' ', 'g')) = $1 ORDER BY created_at DESC LIMIT 1;",
         "options": {
-          "temperature": 0.3
+          "queryReplacement": "={{ [ $json.task_key ] }}"
         }
       },
-      "id": "gemini-analyze-model",
-      "name": "Gemini Analyze Model",
-      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
-      "typeVersion": 1,
+      "id": "ebddcc03-a89c-5ba9-8e60-36b61e366f6d",
+      "name": "Find Existing",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
       "position": [
-        680,
-        450
+        440,
+        400
       ],
       "credentials": {
-        "googlePalmApi": {
-          "id": "U6jVg3cxRNRwbqPQ",
-          "name": "Google Gemini API"
+        "postgres": {
+          "id": "q2sycFRoxqP47oRY",
+          "name": "Postgres account"
         }
-      }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "45886a0d-e8ae-59e5-a952-e7bec19d81a5",
+              "leftValue": "={{ $json.workflow_name }}",
+              "operator": {
+                "type": "string",
+                "operation": "exists"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5a8f3680-66fc-5242-8f4d-45fbb4fa1d99",
+      "name": "Already Built?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        660,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, duplicate: true, workflow_name: $json.workflow_name, message: 'Dieser Workflow existiert bereits – es wurde kein neuer angelegt.' } }}",
+        "options": {}
+      },
+      "id": "43e33ceb-f81f-5b1c-a0b9-3f22e50d90e6",
+      "name": "Respond Existing",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        880,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: $('Normalize Input').first().json }];"
+      },
+      "id": "86dd604c-9649-5372-be4f-9423f9b65d3f",
+      "name": "Restore Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        520
+      ]
     },
     {
       "parameters": {
         "promptType": "define",
         "text": "=Du bist EMMA's strategische Workflow-Architektin.\n\nDeine Mission: Entwirf die kognitive Struktur für einen neuen Workflow.\n\nAnfrage: {{ $json.task }}\n\nAntworte als technischer Entwurf (JSON):\n{\n  \"workflow_type\": \"CONTENT|AUTOMATION|INTEGRATION|ORCHESTRATION|CUSTOM\",\n  \"complexity\": 1-10,\n  \"cognitive_requirement\": \"Was muss die KI hier 'verstehen'?\",\n  \"required_nodes\": [\"node1\", \"node2\"],\n  \"logic_gate\": \"Wie wird der Erfolg gemessen?\"\n}"
       },
-      "id": "analyze-task",
+      "id": "492f0f68-f4bf-5598-94b4-0f5717d6fbcb",
       "name": "Analyze Task",
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "typeVersion": 1.4,
       "position": [
-        680,
-        300
+        1100,
+        520
       ]
     },
     {
       "parameters": {
-        "functionCode": "// Parse analysis\nconst response = $json.text || $json.message?.content || '{}';\nlet analysis;\ntry {\n  const jsonMatch = response.match(/\\{[\\s\\S]*\\}/);\n  analysis = jsonMatch ? JSON.parse(jsonMatch[0]) : {};\n} catch (e) {\n  analysis = { workflow_type: 'CUSTOM', complexity: 5 };\n}\n\nreturn [{\n  json: {\n    ...items[0].json,\n    analysis\n  }\n}];"
-      },
-      "id": "parse-analysis",
-      "name": "Parse Analysis",
-      "type": "n8n-nodes-base.function",
-      "typeVersion": 1,
-      "position": [
-        900,
-        300
-      ]
-    },
-    {
-      "parameters": {
-        "modelName": "models/gemini-1.5-pro",
+        "modelName": "models/gemini-2.5-flash",
         "options": {
-          "temperature": 0.2
+          "temperature": 0.3
         }
       },
-      "id": "gemini-generate-model",
-      "name": "Gemini Generate Model",
+      "id": "42f5a11b-217f-53c2-84de-bb48202074e3",
+      "name": "Gemini Analyze Model",
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1,
       "position": [
-        1120,
-        450
+        1100,
+        720
       ],
       "credentials": {
         "googlePalmApi": {
@@ -103,44 +152,81 @@
     },
     {
       "parameters": {
-        "promptType": "define",
-        "text": "=Du bist EMMA's Workflow-Generator (Cognitive Version).\n\nErstelle ein n8n JSON, das für Irina's Erfolg optimiert ist.\n\nAnforderungen:\n- Task: {{ $json.task }}\n- Typ: {{ $json.analysis.workflow_type }}\n- Komplexität: {{ $json.analysis.complexity }}\n\nFormat: Valides n8n JSON (nodes + connections).\n\nAntworte NUR mit dem JSON-Objekt."
+        "jsCode": "const response = $input.first().json.text || '{}';\nlet analysis;\ntry {\n  const m = response.match(/\\{[\\s\\S]*\\}/);\n  analysis = m ? JSON.parse(m[0]) : {};\n} catch (e) {\n  analysis = { workflow_type: 'CUSTOM', complexity: 5 };\n}\nreturn [{ json: { ...$('Normalize Input').first().json, analysis } }];"
       },
-      "id": "generate-workflow",
-      "name": "Generate Workflow",
-      "type": "@n8n/n8n-nodes-langchain.chainLlm",
-      "typeVersion": 1.4,
+      "id": "c82e1ed2-f3ec-5a57-b499-cc1364587b02",
+      "name": "Parse Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
-        1120,
-        300
+        1320,
+        520
       ]
     },
     {
       "parameters": {
-        "functionCode": "// Parse generated workflow\nconst response = $json.text || $json.message?.content || '{}';\nlet workflowJson;\ntry {\n  const jsonMatch = response.match(/\\{[\\s\\S]*\\}/);\n  workflowJson = jsonMatch ? JSON.parse(jsonMatch[0]) : {};\n} catch (e) {\n  throw new Error('Parse failed');\n}\n\nconst workflowName = `EMMA_COGNITIVE_${Date.now()}`;\n\nreturn [{\n  json: {\n    workflow_name: workflowName,\n    workflow_json: workflowJson,\n    task: items[0].json.task,\n    timestamp: new Date().toISOString()\n  }\n}];"
+        "promptType": "define",
+        "text": "=Du bist EMMA's Workflow-Generator (Cognitive Version).\n\nErstelle ein n8n JSON, das für Irina's Erfolg optimiert ist.\n\nAnforderungen:\n- Task: {{ $json.task }}\n- Typ: {{ $json.analysis.workflow_type }}\n- Komplexität: {{ $json.analysis.complexity }}\n\nFormat: Valides n8n JSON mit \"nodes\" und \"connections\". Verbindungen referenzieren Node-NAMEN, nicht IDs.\n\nAntworte NUR mit dem JSON-Objekt."
       },
-      "id": "parse-workflow",
-      "name": "Parse Workflow",
-      "type": "n8n-nodes-base.function",
+      "id": "e0fd10d0-a632-547b-b527-cb07759fccbd",
+      "name": "Generate Workflow",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        1540,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "aab83ca9-a335-51eb-8ae3-0e985257e5fb",
+      "name": "Gemini Generate Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1,
       "position": [
-        1340,
-        300
+        1540,
+        720
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "U6jVg3cxRNRwbqPQ",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const req = $('Parse Analysis').first().json;\nconst response = $input.first().json.text || '{}';\nconst m = response.match(/\\{[\\s\\S]*\\}/);\nif (!m) throw new Error('Kein JSON vom Generator');\nconst wf = JSON.parse(m[0]);\nif (!Array.isArray(wf.nodes) || !wf.nodes.length) throw new Error('Generierter Workflow hat keine Nodes');\n\n// Kaputte Verbindungen (auf nicht existierende Nodes) sofort ablehnen statt einen toten Workflow anzulegen.\nconst names = new Set(wf.nodes.map(n => n.name));\nfor (const [from, kinds] of Object.entries(wf.connections || {})) {\n  const targets = Object.values(kinds).flat(2).map(c => c?.node);\n  for (const t of [from, ...targets]) if (t && !names.has(t)) throw new Error(`Verbindung auf unbekannten Node: ${t}`);\n}\n\nconst slug = req.task_key.replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40).toUpperCase();\nreturn [{ json: {\n  workflow_name: `EMMA_AUTO_${slug || Date.now()}`,\n  workflow_json: { nodes: wf.nodes, connections: wf.connections || {} },\n  task: req.task,\n  timestamp: req.timestamp,\n} }];"
+      },
+      "id": "ef314001-3a6b-5ad7-a41e-d88a36f9627a",
+      "name": "Parse Workflow",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        520
       ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "=INSERT INTO workflow_registry (workflow_id, workflow_name, workflow_json, purpose, created_by)\nVALUES (\n  '{{ $json.workflow_name }}',\n  '{{ $json.workflow_name }}',\n  '{{ JSON.stringify($json.workflow_json) }}',\n  '{{ $json.task }}',\n  'EMMA_SELF_BUILDER'\n)\nRETURNING *;",
-        "options": {}
+        "query": "INSERT INTO workflow_registry (workflow_id, workflow_name, workflow_json, purpose, created_by) VALUES ($1, $1, $2::jsonb, $3, 'EMMA_SELF_BUILDER');",
+        "options": {
+          "queryReplacement": "={{ [ $json.workflow_name, JSON.stringify($json.workflow_json), $json.task ] }}"
+        }
       },
-      "id": "save-to-db",
+      "id": "7c95f3b3-7707-5198-9ea2-274f58470bb6",
       "name": "Save to Database",
       "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2,
+      "typeVersion": 2.5,
       "position": [
-        1560,
-        300
+        1980,
+        520
       ],
       "credentials": {
         "postgres": {
@@ -152,48 +238,21 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=http://n8n:5678/api/v1/workflows",
+        "url": "http://n8n:5678/api/v1/workflows",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-N8N-API-KEY",
-              "value": "={{ $env.N8N_API_KEY }}"
-            }
-          ]
-        },
         "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "name",
-              "value": "={{ $json.workflow_name }}"
-            },
-            {
-              "name": "nodes",
-              "value": "={{ JSON.stringify($json.workflow_json.nodes) }}"
-            },
-            {
-              "name": "connections",
-              "value": "={{ JSON.stringify($json.workflow_json.connections) }}"
-            },
-            {
-              "name": "active",
-              "value": "true"
-            }
-          ]
-        },
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ name: $('Parse Workflow').first().json.workflow_name, nodes: $('Parse Workflow').first().json.workflow_json.nodes, connections: $('Parse Workflow').first().json.workflow_json.connections, settings: { executionOrder: 'v1' } }) }}",
         "options": {}
       },
-      "id": "create-in-n8n",
+      "id": "b0be41c5-3202-510e-8a79-cdb6a0b080f0",
       "name": "Create in n8n via API",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
+      "typeVersion": 4.2,
       "position": [
-        1780,
-        300
+        2200,
+        520
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -205,16 +264,18 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "=INSERT INTO self_modification_log (modification_type, target, after_state, reasoning)\nVALUES (\n  'workflow_created',\n  '{{ $json.workflow_name }}',\n  '{{ JSON.stringify($json.workflow_json) }}',\n  '{{ $json.task }}'\n);",
-        "options": {}
+        "query": "INSERT INTO self_modification_log (modification_type, target, after_state, reasoning) VALUES ('workflow_created', $1, $2::jsonb, $3);",
+        "options": {
+          "queryReplacement": "={{ [ $('Parse Workflow').first().json.workflow_name, JSON.stringify($('Parse Workflow').first().json.workflow_json), $('Parse Workflow').first().json.task ] }}"
+        }
       },
-      "id": "log-modification",
+      "id": "474bb1ed-463d-5c42-8392-be8ccab7b150",
       "name": "Log Self-Modification",
       "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2,
+      "typeVersion": 2.5,
       "position": [
-        2000,
-        300
+        2420,
+        520
       ],
       "credentials": {
         "postgres": {
@@ -226,16 +287,16 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ {\n  success: true,\n  workflow_name: $json.workflow_name,\n  message: 'Sovereign Workflow ready for Irina.',\n  created_at: $json.timestamp\n} }}",
+        "responseBody": "={{ { success: true, duplicate: false, workflow_name: $('Parse Workflow').first().json.workflow_name, n8n_id: $('Create in n8n via API').first().json.id, message: 'Workflow angelegt (inaktiv) – bitte prüfen und dann aktivieren.' } }}",
         "options": {}
       },
-      "id": "respond",
+      "id": "1a72e540-195a-56cb-bb14-8f2b4094d240",
       "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
+      "typeVersion": 1.1,
       "position": [
-        2220,
-        300
+        2640,
+        520
       ]
     }
   ],
@@ -255,6 +316,46 @@
       "main": [
         [
           {
+            "node": "Find Existing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Existing": {
+      "main": [
+        [
+          {
+            "node": "Already Built?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Already Built?": {
+      "main": [
+        [
+          {
+            "node": "Respond Existing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Restore Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Request": {
+      "main": [
+        [
+          {
             "node": "Analyze Task",
             "type": "main",
             "index": 0
@@ -262,7 +363,7 @@
         ]
       ]
     },
-    "gemini-analyze-model": {
+    "Gemini Analyze Model": {
       "ai_languageModel": [
         [
           {
@@ -295,7 +396,7 @@
         ]
       ]
     },
-    "gemini-generate-model": {
+    "Gemini Generate Model": {
       "ai_languageModel": [
         [
           {
@@ -363,6 +464,7 @@
     }
   },
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "timezone": "Europe/Berlin"
   }
 }

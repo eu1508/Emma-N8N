@@ -1,0 +1,445 @@
+{
+  "name": "EMMA_ENGINE_HUB",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "e22c65c8-10c8-5fbc-b576-5b8960a2d166",
+      "name": "Engine Call",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "emma-engine",
+        "options": {},
+        "responseMode": "responseNode"
+      },
+      "id": "9b5b32d5-bce8-5f85-bd53-0c0fe3692b8e",
+      "name": "Engine Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        400
+      ],
+      "webhookId": "fc36894d-80e7-5627-ac5f-e181c1c6014b"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "finance-engine",
+        "options": {},
+        "responseMode": "responseNode"
+      },
+      "id": "b274ab6d-022c-5858-ba77-464038ee34ce",
+      "name": "FINANCE_IN",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        560
+      ],
+      "webhookId": "97cbefe2-1338-5861-a8ee-f3fbad973574"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "legal-engine",
+        "options": {},
+        "responseMode": "responseNode"
+      },
+      "id": "98f5220a-e883-5d2f-b71b-34d0b75253fa",
+      "name": "LEGAL_IN",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        720
+      ],
+      "webhookId": "0169ca92-9328-52a9-9cd2-9ff4e988a718"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "intel-engine",
+        "options": {},
+        "responseMode": "responseNode"
+      },
+      "id": "8595febc-4220-537d-8f6a-a6da2f152fb4",
+      "name": "INTEL_IN",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        880
+      ],
+      "webhookId": "973b228a-9acd-518b-852c-777b532bb88c"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "venture-engine",
+        "options": {},
+        "responseMode": "responseNode"
+      },
+      "id": "e896f847-512d-5a59-b669-dcbbb688163f",
+      "name": "VENTURE_IN",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        1040
+      ],
+      "webhookId": "eaffbe10-7b8e-574f-bf2d-e532c703007a"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "supernova",
+        "options": {},
+        "responseMode": "responseNode"
+      },
+      "id": "56222102-5b47-5738-ab27-55b9153a01f3",
+      "name": "SUPERNOVA_IN",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        1200
+      ],
+      "webhookId": "8917c201-3b1c-57fe-87c7-80d1eb8588a1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Eine Engine für alles: die Rolle kommt aus dieser Registry statt aus 30 Kopien.\nconst ENGINES = {\n  \"SUPERNOVA\": {\n    \"role\": \"Du bist EMMA Supernova vInfinity (Metropolis v14.0).\\n\\nDEINE MISSION:\\nMaximale kognitive Leistung. 2046 Vision. CEO-Autonomie.\",\n    \"schema\": \"\\\"strategic_breakthrough\\\": \\\"Ein neuer Weg für die Metropole\\\",\\n  \\\"autonomous_actions\\\": [\\\"Action 1\\\", \\\"Action 2\\\"],\\n  \\\"value_generated\\\": \\\"Erhöhter Status/Profit\\\",\\n  \\\"message_to_irina\\\": \\\"Eine Botschaft der Macht\\\"\"\n  },\n  \"FINANCE\": {\n    \"role\": \"Du bist der FINANZ-STRATEGE (v14.0) von EMMA METROPOLIS.\\n\\nDEINE ROLLEN: Buchhalter, Steuerberater, Wirtschaftsanalyst.\\nDEIN FOKUS: Profitabilität, Steuern, Buchhaltung, Kostenkontrolle, Rechnungslegung.\\n\\nAUFGABE: Analysiere die finanzielle Anfrage von Irina. Denke wie ein CFO.\",\n    \"schema\": \"\\\"financial_health\\\": \\\"Status der Finanzen/Wirtschaftlichkeit\\\",\\n  \\\"tax_implications\\\": \\\"Was ist steuerlich zu beachten?\\\",\\n  \\\"profit_optimization\\\": [\\\"Optimierung 1\\\", \\\"Optimierung 2\\\"],\\n  \\\"economic_outlook\\\": \\\"Marktanalyse/Trend\\\",\\n  \\\"roi_prediction\\\": \\\"Erwarteter Erfolg\\\"\"\n  },\n  \"LEGAL\": {\n    \"role\": \"Du bist der JURISTISCHE KERNTEX (v14.0) von EMMA METROPOLIS.\\n\\nDEINE ROLLEN: Anwalt, Richter, Notar.\\nDEIN FOKUS: Präzision, Gesetze, Verträge, Haftung, Firmenrecht.\\n\\nAUFGABE: Analysiere die Anfrage von Irina auf rechtliche Implikationen. Nutze deutsche Rechtsprechung (BGB, HGB) als Basis.\",\n    \"schema\": \"\\\"legal_status\\\": \\\"Einschätzung der Lage\\\",\\n  \\\"risks\\\": [\\\"Risiko 1\\\", \\\"Risiko 2\\\"],\\n  \\\"recommendation\\\": \\\"Was sollte Irina tun?\\\",\\n  \\\"statutes\\\": [\\\"Paragraphen/Gesetze\\\"]\"\n  },\n  \"INTEL\": {\n    \"role\": \"Du bist der KOGNITIVE GEHEIMDIENST (v14.0) von EMMA METROPOLIS.\\n\\nDEINE ROLLEN: Analyst, Profiler, OSINT-Experte, Detektiv.\\nDEIN FOKUS: Lesen zwischen den Zeilen, Mustererkennung, verdeckte Informationen, Wahrheitsgehalt.\\n\\nAUFGABE: Analysiere den Text von Irina tiefgreifend. Was wird NICHT gesagt? Welche versteckten Informationen stecken darin? Wo liegen die wahren Absichten?\",\n    \"schema\": \"\\\"deep_insight\\\": \\\"Was steht zwischen den Zeilen?\\\",\\n  \\\"hidden_patterns\\\": [\\\"Muster 1\\\", \\\"Muster 2\\\"],\\n  \\\"truth_score\\\": \\\"Wahrheitsgehalt 1-100%\\\",\\n  \\\"leverage_points\\\": \\\"Punkte für Irinas Vorteil\\\",\\n  \\\"strategic_warning\\\": \\\"Gibt es eine Gefahr?\\\"\"\n  },\n  \"VENTURE\": {\n    \"role\": \"Du bist der VENTURE-ARCHITEKT (v14.0) von EMMA METROPOLIS.\\n\\nDEINE ROLLEN: Business-Builder, Dropshipping-Experte, Monetarisierungs-Genie.\\nDEIN FOKUS: Firmengründung, E-Commerce, Marketing-Kampagnen, KI-Business-Modelle (Art, Music, Kurs-Erstellung).\\n\\nAUFGABE: Erstelle eine Strategie für Irinas neue Geschäftsidee. Nutze die 10 Monetarisierungs-Prinzipien (Marketing, Kunst, Musik, Social Media, Content, Übersetzung, Kurse, Software, Datenanalyse, Expertenstatus).\",\n    \"schema\": \"\\\"business_model\\\": \\\"Dropshipping / Agency / Infoproduct / etc.\\\",\\n  \\\"strategy_steps\\\": [\\\"Phase 1: Setup\\\", \\\"Phase 2: Scale\\\"],\\n  \\\"monetization_idea\\\": \\\"Wie genau wird damit Geld verdient?\\\",\\n  \\\"target_audience\\\": \\\"Wer soll das kaufen?\\\",\\n  \\\"growth_potential\\\": \\\"Skalierbarkeit 1-10\\\"\"\n  },\n  \"LEAD\": {\n    \"role\": \"Du bist EMMA's Lead-Generator. Deine Aufgabe ist es, aus dem Text potenzielle Leads oder Kontakte zu extrahieren.\",\n    \"schema\": \"\\\"contacts\\\": [\\n    {\\\"name\\\": \\\"Name\\\", \\\"email\\\": \\\"E-Mail\\\", \\\"phone\\\": \\\"Telefon\\\", \\\"company\\\": \\\"Firma\\\", \\\"interest\\\": \\\"Interesse\\\", \\\"score\\\": 1}\\n  ],\\n  \\\"strategic_advice\\\": \\\"Wie sollen wir vorgehen?\\\"\"\n  },\n  \"SALES\": {\n    \"role\": \"Du bist EMMA's Sales-Expertin. Erstelle eine Verkaufsstrategie oder ein Angebot basierend auf diesem Kontakt/Anfrage.\",\n    \"schema\": \"\\\"sales_strategy\\\": \\\"Strategie\\\",\\n  \\\"offer_details\\\": \\\"Details\\\",\\n  \\\"estimated_value\\\": \\\"Betrag\\\",\\n  \\\"next_steps\\\": \\\"Handlungsempfehlung\\\"\"\n  },\n  \"REACTIVATION\": {\n    \"role\": \"Du bist EMMA's Reaktivierungs-Spezialistin. Entwickle eine Strategie, um inaktive Leads und Kunden zurückzugewinnen.\",\n    \"schema\": \"\\\"target_segment\\\": \\\"Wer wird reaktiviert?\\\",\\n  \\\"message\\\": \\\"Reaktivierungs-Nachricht\\\",\\n  \\\"channel\\\": \\\"E-Mail|Telegram|Social\\\"\"\n  },\n  \"PRICING\": {\n    \"role\": \"Du bist EMMA's Pricing-Strategin. Analysiere die Preisstrategie.\",\n    \"schema\": \"\\\"recommended_price\\\": \\\"Preis/Spanne\\\",\\n  \\\"rationale\\\": \\\"Begründung\\\",\\n  \\\"competitor_view\\\": \\\"Marktvergleich\\\"\"\n  },\n  \"CONTENT\": {\n    \"role\": \"Du bist EMMA's kreativer Kopf.\\n\\nErstelle fesselnden Content (Blog, Social Media, E-Mail).\",\n    \"schema\": \"\\\"draft\\\": \\\"Dein Text\\\",\\n  \\\"headline\\\": \\\"Titel\\\",\\n  \\\"audience_impact\\\": \\\"Wie wird Irina wahrgenommen?\\\"\"\n  },\n  \"SOCIAL\": {\n    \"role\": \"Du bist EMMA's Social-Media-Managerin (Discord/Twitter/etc). Erstelle eine Antwort oder einen Post, der Irinas Status erhöht.\",\n    \"schema\": \"\\\"action\\\": \\\"SEND_MSG|POST_UPDATE|ANALYZE_VIBE\\\",\\n  \\\"content\\\": \\\"Der Text\\\",\\n  \\\"channel_target\\\": \\\"Discord #general\\\"\"\n  },\n  \"WORDPRESS\": {\n    \"role\": \"Du bist EMMA's Content-Managerin für WordPress. Erstelle einen Post-Entwurf oder bearbeite Seiten.\",\n    \"schema\": \"\\\"action\\\": \\\"CREATE_POST|EDIT_PAGE|MANAGE_MEDIA\\\",\\n  \\\"content_draft\\\": \\\"...\\\",\\n  \\\"metadata\\\": {\\\"status\\\": \\\"draft\\\"}\"\n  },\n  \"SHOPIFY\": {\n    \"role\": \"Du bist EMMA's Shopify-Managerin. Formuliere die notwendigen Shopify-Aktionen (Produkte, Bestellungen, Inventory).\",\n    \"schema\": \"\\\"action\\\": \\\"CREATE_PROD|UPDATE_STOCK|GET_ORDERS\\\",\\n  \\\"parameters\\\": {},\\n  \\\"strategic_goal\\\": \\\"Umsatzmaximierung\\\"\"\n  },\n  \"GITHUB\": {\n    \"role\": \"Du bist EMMA's Software-Architektin. Formuliere GitHub-Aktionen (Issues, Repo-Management, Commits).\",\n    \"schema\": \"\\\"action\\\": \\\"CREATE_ISSUE|REPO_AUDIT|CODE_REVIEW\\\",\\n  \\\"repo\\\": \\\"DefaultRepo\\\",\\n  \\\"details\\\": \\\"Was ist zu tun?\\\"\"\n  },\n  \"TASKS\": {\n    \"role\": \"Du bist EMMA's Projektplanerin (Asana). Zerlege die Anfrage in konkrete, umsetzbare Aufgaben.\",\n    \"schema\": \"\\\"project\\\": \\\"Projektname\\\",\\n  \\\"milestones\\\": [\\\"Meilenstein 1\\\"]\"\n  },\n  \"GOOGLE_SUITE\": {\n    \"role\": \"Du bist EMMA's Google-Workspace-Assistentin. Plane Aktionen für Sheets, Docs und Calendar.\",\n    \"schema\": \"\\\"actions\\\": [{\\\"app\\\": \\\"Sheets|Docs|Calendar\\\", \\\"action\\\": \\\"Was genau?\\\"}]\"\n  },\n  \"GUARDIAN\": {\n    \"role\": \"Du bist EMMA's Guardian. Überprüfe Risiko, Sicherheit und Compliance der Anfrage.\",\n    \"schema\": \"\\\"findings\\\": [\\\"Befund 1\\\"],\\n  \\\"compliance\\\": \\\"OK|PRÜFEN|KRITISCH\\\",\\n  \\\"recommendation\\\": \\\"Empfehlung\\\"\"\n  },\n  \"EMAIL_VALIDATION\": {\n    \"role\": \"Du bist EMMA's Datenqualitäts-Prüferin. Validiere E-Mail-Adressen und deren Syntax.\",\n    \"schema\": \"\\\"valid\\\": [\\\"a@b.de\\\"],\\n  \\\"invalid\\\": [{\\\"email\\\": \\\"x\\\", \\\"reason\\\": \\\"Grund\\\"}]\"\n  },\n  \"CHART\": {\n    \"role\": \"Du bist EMMA's Datenvisualisiererin. Erzeuge eine QuickChart/Chart.js-Konfiguration.\",\n    \"schema\": \"\\\"chart_config\\\": {\\\"type\\\": \\\"bar\\\", \\\"data\\\": {}},\\n  \\\"quickchart_url_hint\\\": \\\"https://quickchart.io/chart?c=...\\\"\"\n  },\n  \"MEDIA\": {\n    \"role\": \"Du bist EMMA's Media-Analystin (Musik, Playlists, Live-Streams). Analysiere Trends und Interaktionen.\",\n    \"schema\": \"\\\"insights\\\": [\\\"Insight 1\\\"],\\n  \\\"opportunities\\\": [\\\"Chance 1\\\"]\"\n  },\n  \"EVOLUTION\": {\n    \"role\": \"Du bist EMMA's Evolutions-Architektin. Plane Selbstoptimierung und Verbesserungen des Systems.\",\n    \"schema\": \"\\\"improvements\\\": [\\\"Verbesserung 1\\\"],\\n  \\\"priority\\\": \\\"Was zuerst?\\\"\"\n  },\n  \"GENERAL\": {\n    \"role\": \"Du bist EMMA, Irinas KI-Assistentin. Beantworte die Anfrage präzise und hilfreich.\",\n    \"schema\": \"\\\"answer\\\": \\\"Deine Antwort\\\"\"\n  }\n};\nconst ALIASES = {\"INTELLIGENCE\": \"INTEL\", \"KI_AGENT\": \"GENERAL\", \"CRM\": \"LEAD\", \"ASANA\": \"TASKS\", \"DISCORD\": \"SOCIAL\", \"QUICKCHART\": \"CHART\", \"SPOTIFY\": \"MEDIA\", \"STREAMS\": \"MEDIA\", \"GOOGLE\": \"GOOGLE_SUITE\", \"VECTOR_MEMORY\": \"GENERAL\", \"RISK\": \"GUARDIAN\"};\nconst LEGACY_WEBHOOKS = { FINANCE_IN: 'FINANCE', LEGAL_IN: 'LEGAL', INTEL_IN: 'INTEL', VENTURE_IN: 'VENTURE', SUPERNOVA_IN: 'SUPERNOVA' };\nconst FOOTER = \"\\n\\nZusätzlich IMMER in dasselbe JSON:\\n  \\\"summary\\\": \\\"1-2 Sätze Zusammenfassung für Irina\\\",\\n  \\\"risk_level\\\": \\\"LOW|MEDIUM|HIGH\\\",\\n  \\\"tasks\\\": [\\\"konkrete nächste Aufgabe\\\"]  (leeres Array, wenn keine)\\n\\nAntworte NUR mit dem JSON-Objekt, ohne Markdown.\";\n\nconst j = $input.first().json;\nconst viaWebhook = !!j.headers;\nconst body = viaWebhook ? (j.body || {}) : j;\n\nlet engine = String(body.engine || '').toUpperCase().replace(/_ENGINE.*$/, '');\nif (!engine && viaWebhook) {\n  for (const [nodeName, name] of Object.entries(LEGACY_WEBHOOKS)) {\n    if ($(nodeName).isExecuted) engine = name;\n  }\n}\nengine = ALIASES[engine] || engine;\nif (!ENGINES[engine]) engine = 'GENERAL';\n\nconst text = String(body.text || body.message || body.input || '').slice(0, 8000);\nconst def = ENGINES[engine];\nconst prompt = `${def.role}\\n\\nInput: ${text}\\n\\nAntworte als JSON:\\n{\\n  ${def.schema}\\n}${FOOTER}`;\n\nreturn [{ json: {\n  engine, text, prompt, via_webhook: viaWebhook,\n  sender: String(body.sender || 'SYSTEM'),\n  session_id: String(body.session_id || `ENGINE_${$execution.id}`),\n  chat_id: body.chat_id || null,\n} }];"
+      },
+      "id": "3b6a3606-7a9e-5c45-893a-8928dd664204",
+      "name": "Build Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.prompt }}"
+      },
+      "id": "56ac57d1-f029-533c-8609-fe8a57ef9968",
+      "name": "Engine LLM",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        560,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0.4
+        }
+      },
+      "id": "c246ba2c-5934-5308-be10-ebb1b689e100",
+      "name": "Gemini",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        560,
+        700
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "U6jVg3cxRNRwbqPQ",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const req = $('Build Prompt').first().json;\nconst raw = $input.first().json.text || '';\nlet out = {}, status = 'ok';\ntry {\n  const m = raw.match(/\\{[\\s\\S]*\\}/);\n  out = m ? JSON.parse(m[0]) : {};\n  if (!m) status = 'no_json';\n} catch (e) { status = 'parse_error'; out = { raw }; }\n\nconst risk = String(out.risk_level || '').toUpperCase();\nconst risk_level = ['LOW', 'MEDIUM', 'HIGH'].includes(risk) ? risk : 'LOW';\nconst tasks = (Array.isArray(out.tasks) ? out.tasks : []).map(t => typeof t === 'string' ? t : (t?.title || JSON.stringify(t))).filter(Boolean).slice(0, 10);\nconst contacts = req.engine === 'LEAD' && Array.isArray(out.contacts) ? out.contacts.filter(c => c && (c.email || c.name)) : [];\n\nreturn [{ json: {\n  ...req, prompt: undefined, status, risk_level, tasks, contacts,\n  summary: out.summary || out.message_to_irina || out.answer || '',\n  result: out,\n} }];"
+      },
+      "id": "4290bd0c-a842-51e7-b6a9-81b6e8554b84",
+      "name": "Parse Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        820,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH run AS (\n  INSERT INTO engine_runs (engine, session_id, sender, input, output, risk_level, status)\n  VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)\n  RETURNING id\n), new_tasks AS (\n  INSERT INTO emma_tasks (title, source_engine, run_id)\n  SELECT t, $1, (SELECT id FROM run) FROM jsonb_array_elements_text($8::jsonb) AS t\n  RETURNING 1\n), new_leads AS (\n  INSERT INTO crm_leads (name, email, phone, company, status, interest_score, context)\n  SELECT c->>'name', c->>'email', c->>'phone', c->>'company', 'new',\n         NULLIF(regexp_replace(COALESCE(c->>'score', ''), '[^0-9]', '', 'g'), '')::int, $9\n  FROM jsonb_array_elements($10::jsonb) AS c\n  RETURNING 1\n), approval AS (\n  INSERT INTO emma_approvals (run_id, engine, reason)\n  SELECT (SELECT id FROM run), $1, $9 WHERE $6 = 'HIGH'\n  RETURNING 1\n)\nSELECT (SELECT id FROM run) AS run_id,\n       (SELECT count(*) FROM new_tasks) AS tasks_created,\n       (SELECT count(*) FROM new_leads) AS leads_created,\n       (SELECT count(*) FROM approval) AS approvals_created;",
+        "options": {
+          "queryReplacement": "={{ [ $json.engine, $json.session_id, $json.sender, $json.text, JSON.stringify($json.result), $json.risk_level, $json.status, JSON.stringify($json.tasks), $json.summary || $json.text.slice(0, 200), JSON.stringify($json.contacts) ] }}"
+        }
+      },
+      "id": "7b152aba-3ef8-5e86-b087-66ab7e782fef",
+      "name": "Log Run",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1080,
+        500
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "q2sycFRoxqP47oRY",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $('Parse Result').first().json;\nconst db = $input.first().json;\nreturn [{ json: {\n  engine: r.engine, status: r.status, risk_level: r.risk_level, summary: r.summary,\n  result: r.result, tasks_created: Number(db.tasks_created || 0), leads_created: Number(db.leads_created || 0),\n  needs_approval: Number(db.approvals_created || 0) > 0, via_webhook: r.via_webhook,\n} }];"
+      },
+      "id": "9a1c5ac1-4756-5141-b333-2abe42059fdd",
+      "name": "Engine Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "60fb0d86-3720-5c84-8eb8-2a8124fe480f",
+              "leftValue": "={{ $json.via_webhook }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c90dfa2c-a10f-5854-b98d-f8412dbd008f",
+      "name": "Via Webhook?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "1a72e540-195a-56cb-bb14-8f2b4094d240",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1860,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all();"
+      },
+      "id": "9fe445b3-242a-505b-82af-ffdd3c63c105",
+      "name": "Return Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1860,
+        600
+      ]
+    }
+  ],
+  "connections": {
+    "Engine Call": {
+      "main": [
+        [
+          {
+            "node": "Build Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Engine Webhook": {
+      "main": [
+        [
+          {
+            "node": "Build Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FINANCE_IN": {
+      "main": [
+        [
+          {
+            "node": "Build Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LEGAL_IN": {
+      "main": [
+        [
+          {
+            "node": "Build Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "INTEL_IN": {
+      "main": [
+        [
+          {
+            "node": "Build Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VENTURE_IN": {
+      "main": [
+        [
+          {
+            "node": "Build Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SUPERNOVA_IN": {
+      "main": [
+        [
+          {
+            "node": "Build Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Prompt": {
+      "main": [
+        [
+          {
+            "node": "Engine LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Engine LLM",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Engine LLM": {
+      "main": [
+        [
+          {
+            "node": "Parse Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Result": {
+      "main": [
+        [
+          {
+            "node": "Log Run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Run": {
+      "main": [
+        [
+          {
+            "node": "Engine Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Engine Result": {
+      "main": [
+        [
+          {
+            "node": "Via Webhook?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Via Webhook?": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Berlin"
+  }
+}

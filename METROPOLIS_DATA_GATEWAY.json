@@ -1,0 +1,317 @@
+{
+  "name": "METROPOLIS_DATA_GATEWAY",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "logging-engine",
+        "options": {}
+      },
+      "id": "29c3323a-6ebf-5ba4-81be-cb1f9068732f",
+      "name": "LOG_IN",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        200
+      ],
+      "webhookId": "f77685de-343c-5fbe-a85c-08948c6d6580"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "metropolis-sync",
+        "options": {}
+      },
+      "id": "e2f3f758-0aac-563b-9f52-d1b70f76421c",
+      "name": "SYNC_IN",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        360
+      ],
+      "webhookId": "c85c4487-32a0-5485-b528-0a2d66772524"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "metropolis-kpi",
+        "options": {}
+      },
+      "id": "80741f1e-fe8d-55b5-805a-71e2c41db637",
+      "name": "KPI_IN",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        520
+      ],
+      "webhookId": "f6e5de97-b921-5f20-9972-ccb401170b81"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "crm-engine",
+        "options": {}
+      },
+      "id": "8a099562-9368-5dc7-a093-6dd23ca59281",
+      "name": "CRM_IN",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        680
+      ],
+      "webhookId": "73c58a42-6fc3-5e40-bb48-7a74a05def5a"
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $input.first().json.body || {};\nlet kind = 'event', source = 'LOG';\nif ($('KPI_IN').isExecuted) kind = 'kpi';\nelse if ($('CRM_IN').isExecuted) kind = 'lead';\nelse if ($('SYNC_IN').isExecuted) source = 'SYNC';\nreturn [{ json: {\n  kind, source,\n  level: String(b.level || b.status || 'INFO').toUpperCase(),\n  message: String(b.message || b.text || (source === 'SYNC' ? 'METROPOLIS_STATUS ACTIVE' : '')),\n  payload: b,\n} }];"
+      },
+      "id": "fca10488-b604-5b27-8fba-3f415c49aafb",
+      "name": "Classify",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "loose"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.kind }}",
+                    "rightValue": "kpi",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "kpi"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "loose"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.kind }}",
+                    "rightValue": "lead",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "lead"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "loose"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.kind }}",
+                    "rightValue": "event",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "event"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bb3c47c4-41f2-5bf4-842a-625c3bc42f21",
+      "name": "Route",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        500,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO kpi_metrics (metric_name, value, unit) VALUES ($1, $2, $3);",
+        "options": {
+          "queryReplacement": "={{ [ $json.payload.metric, Number($json.payload.value) || 0, $json.payload.unit || 'count' ] }}"
+        }
+      },
+      "id": "8553deb9-247f-57de-bfad-676783ce36fe",
+      "name": "Save KPI",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        760,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "q2sycFRoxqP47oRY",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO crm_leads (name, email, phone, company, status, context) VALUES ($1, $2, $3, $4, 'new', 'Lead via CRM Webhook');",
+        "options": {
+          "queryReplacement": "={{ [ $json.payload.name || null, $json.payload.email || null, $json.payload.phone || null, $json.payload.company || null ] }}"
+        }
+      },
+      "id": "103b2c01-f761-588c-a8ae-e9b953e1f130",
+      "name": "Save Lead",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        760,
+        440
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "q2sycFRoxqP47oRY",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO emma_events (source, level, message, payload) VALUES ($1, $2, $3, $4::jsonb);",
+        "options": {
+          "queryReplacement": "={{ [ $json.source, $json.level, $json.message, JSON.stringify($json.payload) ] }}"
+        }
+      },
+      "id": "0692b4c4-68f3-5256-96e7-95bc20071d3a",
+      "name": "Save Event",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        760,
+        580
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "q2sycFRoxqP47oRY",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "LOG_IN": {
+      "main": [
+        [
+          {
+            "node": "Classify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SYNC_IN": {
+      "main": [
+        [
+          {
+            "node": "Classify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "KPI_IN": {
+      "main": [
+        [
+          {
+            "node": "Classify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRM_IN": {
+      "main": [
+        [
+          {
+            "node": "Classify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify": {
+      "main": [
+        [
+          {
+            "node": "Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route": {
+      "main": [
+        [
+          {
+            "node": "Save KPI",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Berlin"
+  }
+}

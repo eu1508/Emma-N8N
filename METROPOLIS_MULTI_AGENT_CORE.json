@@ -1,237 +1,310 @@
 {
-    "name": "METROPOLIS_MULTI_AGENT_CORE",
-    "nodes": [
-        {
-            "parameters": {
-                "path": "multi-agent-core",
-                "method": "POST",
-                "options": {}
-            },
-            "id": "agent-in",
-            "name": "AGENT_IN",
-            "type": "n8n-nodes-base.webhook",
-            "typeVersion": 1,
-            "position": [
-                200,
-                400
-            ]
-        },
-        {
-            "parameters": {
-                "modelName": "models/gemini-1.5-pro",
-                "options": {
-                    "temperature": 0.3
-                }
-            },
-            "id": "strategy-model",
-            "name": "Strategy Model",
-            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
-            "typeVersion": 1,
-            "position": [
-                450,
-                200
-            ],
-            "credentials": {
-                "googlePalmApi": {
-                    "id": "U6jVg3cxRNRwbqPQ",
-                    "name": "Google Gemini API"
-                }
-            }
-        },
-        {
-            "parameters": {
-                "promptType": "define",
-                "text": "=Du bist der STRATEGIE-AGENT (Metropolis v14.0).\nAnalysiere die Anfrage auf langfristigen Erfolg und CEO-Alignment.\n\nInput: {{$json.text}}\n\nAntworte kurz und präzise."
-            },
-            "id": "strategy-agent",
-            "name": "STRATEGY_AGENT",
-            "type": "@n8n/n8n-nodes-langchain.chainLlm",
-            "typeVersion": 1.4,
-            "position": [
-                600,
-                200
-            ]
-        },
-        {
-            "parameters": {
-                "modelName": "models/gemini-1.5-pro",
-                "options": {
-                    "temperature": 0.2
-                }
-            },
-            "id": "risk-model",
-            "name": "Risk Model",
-            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
-            "typeVersion": 1,
-            "position": [
-                450,
-                400
-            ],
-            "credentials": {
-                "googlePalmApi": {
-                    "id": "U6jVg3cxRNRwbqPQ",
-                    "name": "Google Gemini API"
-                }
-            }
-        },
-        {
-            "parameters": {
-                "promptType": "define",
-                "text": "=Du bist der RISIKO-AGENT (Metropolis v14.0).\nAnalysiere die Anfrage auf Gefahren, Sicherheitslücken und ethische Risiken.\n\nInput: {{$json.text}}\n\nAntworte kurz und präzise."
-            },
-            "id": "risk-agent",
-            "name": "RISK_AGENT",
-            "type": "@n8n/n8n-nodes-langchain.chainLlm",
-            "typeVersion": 1.4,
-            "position": [
-                600,
-                400
-            ]
-        },
-        {
-            "parameters": {
-                "modelName": "models/gemini-1.5-pro",
-                "options": {
-                    "temperature": 0.6
-                }
-            },
-            "id": "opportunity-model",
-            "name": "Opportunity Model",
-            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
-            "typeVersion": 1,
-            "position": [
-                450,
-                600
-            ],
-            "credentials": {
-                "googlePalmApi": {
-                    "id": "U6jVg3cxRNRwbqPQ",
-                    "name": "Google Gemini API"
-                }
-            }
-        },
-        {
-            "parameters": {
-                "promptType": "define",
-                "text": "=Du bist der OPPORTUNITY-AGENT (Metropolis v14.0).\nAnalysiere die Anfrage auf Wachstumschancen und ROI-Potenzial.\n\nInput: {{$json.text}}\n\nAntworte kurz und präzise."
-            },
-            "id": "opportunity-agent",
-            "name": "OPPORTUNITY_AGENT",
-            "type": "@n8n/n8n-nodes-langchain.chainLlm",
-            "typeVersion": 1.4,
-            "position": [
-                600,
-                600
-            ]
-        },
-        {
-            "parameters": {
-                "options": {}
-            },
-            "id": "agent-respond",
-            "name": "AGENT_RESPOND",
-            "type": "n8n-nodes-base.respondToWebhook",
-            "typeVersion": 1.5,
-            "position": [
-                900,
-                400
-            ]
-        }
-    ],
-    "connections": {
-        "AGENT_IN": {
-            "main": [
-                [
-                    {
-                        "node": "STRATEGY_AGENT",
-                        "type": "main",
-                        "index": 0
-                    }
-                ],
-                [
-                    {
-                        "node": "RISK_AGENT",
-                        "type": "main",
-                        "index": 0
-                    }
-                ],
-                [
-                    {
-                        "node": "OPPORTUNITY_AGENT",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "strategy-model": {
-            "ai_languageModel": [
-                [
-                    {
-                        "node": "STRATEGY_AGENT",
-                        "type": "ai_languageModel",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "risk-model": {
-            "ai_languageModel": [
-                [
-                    {
-                        "node": "RISK_AGENT",
-                        "type": "ai_languageModel",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "opportunity-model": {
-            "ai_languageModel": [
-                [
-                    {
-                        "node": "OPPORTUNITY_AGENT",
-                        "type": "ai_languageModel",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "STRATEGY_AGENT": {
-            "main": [
-                [
-                    {
-                        "node": "AGENT_RESPOND",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "RISK_AGENT": {
-            "main": [
-                [
-                    {
-                        "node": "AGENT_RESPOND",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "OPPORTUNITY_AGENT": {
-            "main": [
-                [
-                    {
-                        "node": "AGENT_RESPOND",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        }
+  "name": "METROPOLIS_MULTI_AGENT_CORE",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "multi-agent-core",
+        "options": {},
+        "responseMode": "responseNode"
+      },
+      "id": "2f048338-4bb7-5edb-ba58-551e73c88762",
+      "name": "AGENT_IN",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        400
+      ],
+      "webhookId": "a88e7bc2-1c6d-5316-9f16-86128c678931"
     },
-    "settings": {
-        "executionOrder": "v1"
+    {
+      "parameters": {
+        "jsCode": "const b = $input.first().json.body || {};\nreturn [{ json: { text: String(b.text || b.message || '') } }];"
+      },
+      "id": "4a69b3a3-267f-5c05-b0a1-f9557cecbdcf",
+      "name": "Prepare",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Du bist der STRATEGIE-AGENT (Metropolis v14.0).\nAnalysiere die Anfrage auf langfristigen Erfolg und CEO-Alignment.\n\nInput: {{ $json.text }}\n\nAntworte kurz und präzise."
+      },
+      "id": "7436a831-12fb-534b-a34c-697fa2f6064f",
+      "name": "STRATEGY_AGENT",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        500,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "24f8ee08-b54f-5279-9176-7e11c01e3811",
+      "name": "Strategy Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        500,
+        350
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "U6jVg3cxRNRwbqPQ",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Du bist der RISIKO-AGENT (Metropolis v14.0).\nAnalysiere die Anfrage auf Gefahren, Sicherheitslücken und ethische Risiken.\n\nInput: {{ $json.text }}\n\nAntworte kurz und präzise."
+      },
+      "id": "279d508a-ecab-57a0-af95-b487f46e83b5",
+      "name": "RISK_AGENT",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        500,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "e19dfb11-f7fd-5965-b269-81818a188624",
+      "name": "Risk Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        500,
+        610
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "U6jVg3cxRNRwbqPQ",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Du bist der OPPORTUNITY-AGENT (Metropolis v14.0).\nAnalysiere die Anfrage auf Wachstumschancen und ROI-Potenzial.\n\nInput: {{ $json.text }}\n\nAntworte kurz und präzise."
+      },
+      "id": "21aa7015-28b2-5beb-8ea6-593498578308",
+      "name": "OPPORTUNITY_AGENT",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        500,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0.6
+        }
+      },
+      "id": "7136e6f6-b6de-58b9-bdfb-b7aabf00f67d",
+      "name": "Opportunity Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        500,
+        870
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "U6jVg3cxRNRwbqPQ",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "id": "27fde2ae-5b13-5b8c-8918-d7008b3459f7",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        780,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const [s, r, o] = $input.all().map(i => i.json.text || '');\nreturn [{ json: { strategy: s, risk: r, opportunity: o } }];"
+      },
+      "id": "5d255e45-c452-5270-b8ca-546f7a958e58",
+      "name": "Combine",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "02ddffff-f12b-5133-b7c4-4bc45e9d8367",
+      "name": "AGENT_RESPOND",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1220,
+        400
+      ]
     }
+  ],
+  "connections": {
+    "Prepare": {
+      "main": [
+        [
+          {
+            "node": "STRATEGY_AGENT",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "RISK_AGENT",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "OPPORTUNITY_AGENT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Strategy Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "STRATEGY_AGENT",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "STRATEGY_AGENT": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Risk Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "RISK_AGENT",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RISK_AGENT": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Opportunity Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "OPPORTUNITY_AGENT",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OPPORTUNITY_AGENT": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "AGENT_IN": {
+      "main": [
+        [
+          {
+            "node": "Prepare",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Combine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine": {
+      "main": [
+        [
+          {
+            "node": "AGENT_RESPOND",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Berlin"
+  }
 }
