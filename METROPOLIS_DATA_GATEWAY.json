@@ -5,6 +5,7 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "logging-engine",
+        "authentication": "headerAuth",
         "options": {}
       },
       "id": "29c3323a-6ebf-5ba4-81be-cb1f9068732f",
@@ -15,12 +16,19 @@
         0,
         200
       ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "EMMA_WEBHOOK_AUTH",
+          "name": "EMMA Webhook Auth"
+        }
+      },
       "webhookId": "f77685de-343c-5fbe-a85c-08948c6d6580"
     },
     {
       "parameters": {
         "httpMethod": "POST",
         "path": "metropolis-sync",
+        "authentication": "headerAuth",
         "options": {}
       },
       "id": "e2f3f758-0aac-563b-9f52-d1b70f76421c",
@@ -31,12 +39,19 @@
         0,
         360
       ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "EMMA_WEBHOOK_AUTH",
+          "name": "EMMA Webhook Auth"
+        }
+      },
       "webhookId": "c85c4487-32a0-5485-b528-0a2d66772524"
     },
     {
       "parameters": {
         "httpMethod": "POST",
         "path": "metropolis-kpi",
+        "authentication": "headerAuth",
         "options": {}
       },
       "id": "80741f1e-fe8d-55b5-805a-71e2c41db637",
@@ -47,12 +62,19 @@
         0,
         520
       ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "EMMA_WEBHOOK_AUTH",
+          "name": "EMMA Webhook Auth"
+        }
+      },
       "webhookId": "f6e5de97-b921-5f20-9972-ccb401170b81"
     },
     {
       "parameters": {
         "httpMethod": "POST",
         "path": "crm-engine",
+        "authentication": "headerAuth",
         "options": {}
       },
       "id": "8a099562-9368-5dc7-a093-6dd23ca59281",
@@ -63,11 +85,17 @@
         0,
         680
       ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "EMMA_WEBHOOK_AUTH",
+          "name": "EMMA Webhook Auth"
+        }
+      },
       "webhookId": "73c58a42-6fc3-5e40-bb48-7a74a05def5a"
     },
     {
       "parameters": {
-        "jsCode": "const b = $input.first().json.body || {};\nlet kind = 'event', source = 'LOG';\nif ($('KPI_IN').isExecuted) kind = 'kpi';\nelse if ($('CRM_IN').isExecuted) kind = 'lead';\nelse if ($('SYNC_IN').isExecuted) source = 'SYNC';\nreturn [{ json: {\n  kind, source,\n  level: String(b.level || b.status || 'INFO').toUpperCase(),\n  message: String(b.message || b.text || (source === 'SYNC' ? 'METROPOLIS_STATUS ACTIVE' : '')),\n  payload: b,\n} }];"
+        "jsCode": "const b = $input.first().json.body || {};\nlet kind = 'event', source = 'LOG';\nif ($('KPI_IN').isExecuted) kind = 'kpi';\nelse if ($('CRM_IN').isExecuted) kind = 'lead';\nelse if ($('SYNC_IN').isExecuted) source = 'SYNC';\nreturn [{ json: {\n  kind, source,\n  level: String(b.level || b.status || 'INFO').toUpperCase().slice(0, 20),\n  message: String(b.message || b.text || (source === 'SYNC' ? 'METROPOLIS_STATUS ACTIVE' : '')).slice(0, 2000),\n  payload: b,\n} }];"
       },
       "id": "fca10488-b604-5b27-8fba-3f415c49aafb",
       "name": "Classify",
@@ -163,7 +191,7 @@
         "operation": "executeQuery",
         "query": "INSERT INTO kpi_metrics (metric_name, value, unit) VALUES ($1, $2, $3);",
         "options": {
-          "queryReplacement": "={{ [ $json.payload.metric, Number($json.payload.value) || 0, $json.payload.unit || 'count' ] }}"
+          "queryReplacement": "={{ [ String($json.payload.metric || '').slice(0, 200), Number($json.payload.value) || 0, String($json.payload.unit || 'count').slice(0, 50) ] }}"
         }
       },
       "id": "8553deb9-247f-57de-bfad-676783ce36fe",

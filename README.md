@@ -1,211 +1,161 @@
 # EMMA / Metropolis – n8n Workflows
 
-> **Status: GEBAUT, nicht LIVE.** Die Dateien sind geprüft (Validator, Syntax, Logik mit Testdaten), aber noch nicht
-> in der produktiven n8n-Instanz (self-hosted, Ubuntu-VM auf der Synology, `100.79.103.114:5678`) ausgeführt worden.
-> Nur der **Telegram-Eingang** des Orchestrators (`CEO_TELEGRAM_IN`) ist absichtlich deaktiviert, bis die Fragen unter
-> „Vor dem Aktivieren klären“ entschieden sind. Phase 1 (Briefing, Arbeitsspuren, Report) **sendet** nur an Telegram
-> und stört deshalb keinen anderen Bot-Empfänger. Sie kann sofort live gehen, siehe „Phase 1 in 10 Minuten live“.
+> **Status: GEBAUT, nicht LIVE.** Geprüft mit Validator, Syntax-Check und Logik-Tests auf Testdaten. In der produktiven
+> n8n-Instanz ist noch nichts ausgeführt worden. Die core-os-API-Endpunkte unten sind **unbestätigt**, sie müssen gegen
+> core-os abgeglichen werden, bevor irgendetwas aktiviert wird.
 
-Früher waren es über 70 Workflows, viele davon doppelt, und die meisten liefen nicht. Jetzt sind es **8**:
+## Grundregeln (feste Entscheidungen des Nutzers)
 
-| Workflow | Zweck |
-|---|---|
-| `EMMA_MASTER_ORCHESTRATOR` | Irina schreibt → Emma antwortet mit Gedächtnis, legt Termine an, ruft Engines oder Jarvis, versteht Befehle |
-| `EMMA_COGNITIVE_LOOP` | **Emmas inneres Leben**: wacht selbst auf, denkt nach, plant, merkt sich Dinge, schreibt Irina |
-| `EMMA_JARVIS` | **Jarvis**: analytischer Partner und zweite Meinung für Emma (und auf Wunsch für Irina direkt) |
-| `EMMA_ENGINE_HUB` | **Eine** Engine mit allen Fach-Rollen (FINANCE, LEGAL, SALES, CONTENT, LEAD, …) statt 30 Kopien |
-| `EMMA_DAILY_REPORT` | Tagesbericht 08:00 an Telegram |
-| `METROPOLIS_DATA_GATEWAY` | Logs, Sync, KPIs, CRM-Leads in die DB (alte Webhook-Pfade bleiben gültig) |
-| `METROPOLIS_MULTI_AGENT_CORE` | Strategie-, Risiko- und Opportunity-Agent parallel |
-| `EMMA_SELF_BUILDER` | Baut neue Workflows mit Duplikat-Schutz und legt sie inaktiv an |
+- **core-os ist die einzige Wahrheit** für Gedächtnis, Aufgaben, Freigaben und die Telegram-Brücke. n8n hat **kein**
+  eigenes Gedächtnis und keine eigenen Aufgaben- oder Freigabetabellen.
+- **Genau ein Telegram-Empfänger:** `emma-telegram-worker` (core-os). n8n empfängt kein Telegram.
+- **Keine proaktiven Telegram-Nachrichten** aus n8n. Der Tagesreport kommt von core-os (20:00).
+- **JARVIS bleibt in Quarantäne.** In n8n gibt es keinen Jarvis-Workflow.
+- **Nichts mit Wirkung ohne Freigabe:** Engines, Dokumente, Kalendereinträge und neue Workflows werden nur
+  **vorgeschlagen** und erst nach einer in core-os bestätigten Freigabe ausgeführt.
 
-## Phase 1 – Entscheidungen
+## Workflows (9)
 
-| Frage | Entscheidung | Umsetzung |
+| Workflow | Zweck | Auslöser |
 |---|---|---|
-| Wo läuft es? | Synology mit Docker, PC als Reserve | n8n läuft bereits im Docker auf der Synology-VM. Alles hier sind n8n-Workflows, der PC wird nicht gebraucht. |
-| Postfach | eigene Jarvis-Adresse, später | **Phase 2** (IMAP). In Phase 1 gibt es keine Mail-Anbindung. |
-| Kanäle | Telegram zuerst | Nur Telegram aktiv. Vorschläge für später siehe unten. |
-| Budget | 0 € jetzt, Verlustgrenze 5 € | Nur das Free-Tier-Modell **Gemini 2.5 Flash**. Jeder KI-Aufruf wird protokolliert. Ab **5 €** geschätzten Monatskosten macht Emma keine KI-Aufrufe mehr. |
-| Autonomie | wie vorgeschlagen | Leitplanken bleiben: 6 Aktionen pro Zyklus, 3 Nachrichten pro Tag, Nachtruhe, riskante Aktionen nur mit Freigabe. |
-| Erstes Ziel | Briefing und sichtbare Arbeitsspuren | Morgens ein Briefing-Dokument, abends ein Arbeitsprotokoll, Notizen, Entwürfe und Kalendereinträge. Alles steht im Daily Report mit Link. |
-| Steuerberater | später | – |
-| Schmerzpunkt | sehen, dass gearbeitet wird | Jede Spur landet in `emma_artifacts` und in Google Drive unter **Emma → EMMA_ARBEITSSPUREN**. |
+| `EMMA_MASTER_ORCHESTRATOR` | Beantwortet Anfragen, die core-os weiterreicht. Mit `user_verified: true` darf er sich Dinge merken (über core-os) und Engine- oder Termin-**Vorschläge** machen. Ohne ist er nur lesend. | Webhook `metropolis-core` (Auth) |
+| `EMMA_COGNITIVE_LOOP` | Denkschleife: 07:00 Morgen-Routine, 21:30 Abend-Reflexion und selbst geplante Weckzeiten. Legt Aufgaben und Erinnerungen in core-os an und erstellt Vorschläge. Schreibt ein Briefing bzw. Arbeitsprotokoll nach Drive. | Cron 07:00, 21:30 · Timer · Test-Knopf |
+| `EMMA_WAKE_TIMER` | Wartet per Wait-Node bis zur geplanten Weckzeit (10 min bis 7 Tage) und startet dann den Loop. Ersetzt den alten 15-Minuten-Herzschlag. | Sub-Workflow |
+| `EMMA_PROPOSE` | Legt Vorschläge in der Warteschlange ab und fragt die Freigabe bei core-os an | Sub-Workflow |
+| `EMMA_APPROVED_EXECUTOR` | Führt **nur** aus, was core-os freigegeben hat, loggt Erfolg oder Fehler und meldet das Ergebnis an core-os zurück | Webhook `emma-approved` (Auth) · nach jedem Loop · manuell |
+| `EMMA_ENGINE_HUB` | Eine Engine mit allen Fach-Rollen (FINANCE, LEGAL, SALES, CONTENT, LEAD, …) statt 30 Kopien | Sub-Workflow · Webhook `emma-engine` (Auth) |
+| `EMMA_SELF_BUILDER` | Entwirft einen Workflow nur aus erlaubten Node-Typen. Angelegt wird er erst nach Freigabe und dann **inaktiv**. | Webhook `emma-self-builder` (Auth) |
+| `METROPOLIS_MULTI_AGENT_CORE` | Strategie-, Risiko- und Opportunity-Agent parallel | Webhook `multi-agent-core` (Auth) |
+| `METROPOLIS_DATA_GATEWAY` | Logs, Sync, KPIs, CRM-Leads | Webhooks `logging-engine`, `metropolis-sync`, `metropolis-kpi`, `crm-engine` (Auth) |
 
-### Wo die Arbeitsspuren landen (Google Drive → Emma → EMMA_ARBEITSSPUREN)
+Entfernt wurden: `EMMA_JARVIS` (Quarantäne), `EMMA_DAILY_REPORT` (core-os schickt den Tagesreport), alle Telegram-Trigger,
+die ungenutzten Pfade `metropolis-whatsapp`, `metropolis-social`, `finance-engine`, `legal-engine`, `intel-engine`,
+`venture-engine` und `supernova` sowie der Gedächtnis-Export `EMMA_memory.json`.
+
+## Freigabe-Ablauf
+
+```
+Loop / Orchestrator / Self-Builder
+   └─ EMMA_PROPOSE ── n8n_action_queue (status=proposed) ── POST core-os /api/v1/approvals
+                                                                   │  Irina gibt in core-os frei
+core-os ── POST n8n /webhook/emma-approved ─┐                     │
+Loop (07:00/21:30) ─────────────────────────┴─ EMMA_APPROVED_EXECUTOR
+      GET core-os /api/v1/approvals?source=n8n&status=approved
+      → nur passende Einträge der Warteschlange (proposed → running)
+      → ausführen → Ergebnis loggen (done/failed) → POST core-os /api/v1/approvals/{id}/result
+```
+
+Der Executor fragt den Freigabestatus immer selbst bei core-os ab. Der Aufruf von `emma-approved` ist nur ein Anstoß,
+keine Freigabe. Jeder Eintrag der Warteschlange wird höchstens einmal ausgeführt (`proposed → running`).
+
+## core-os-API: was n8n braucht (UNBESTÄTIGT)
+
+Die Endpunkte sind aus den Anforderungen abgeleitet, nicht aus dem core-os-Code. Der liegt noch nicht auf GitHub.
+Sie müssen mit core-os abgeglichen werden. Was fehlt, wird in core-os ergänzt oder hier angepasst, **nicht** durch
+eigene Tabellen ersetzt.
+
+| Methode & Pfad | Wofür | Erwartete Antwort | Status |
+|---|---|---|---|
+| `GET /api/v1/context?for=n8n` | Gedächtnis, letzter Chat, offene Aufgaben, Themen | `{ memory: [], recent_chat: [], tasks: [], agenda: [] }` | offen |
+| `POST /api/v1/memory` | Erinnerung speichern | `{ id }` | offen |
+| `POST /api/v1/tasks` | Aufgabe anlegen | `{ id }` | offen |
+| `POST /api/v1/tasks/{id}/complete` | Aufgabe erledigen | `{ ok }` | offen |
+| `POST /api/v1/approvals` | Freigabe anfragen (`source`, `reference`, `kind`, `summary`) | `{ id }` | offen |
+| `GET /api/v1/approvals?source=n8n&status=approved` | freigegebene Vorschläge | `[ { id } ]` oder `{ items: [...] }` | offen |
+| `POST /api/v1/approvals/{id}/result` | Ergebnis melden (`ok`, `detail`, `url`) | `{ ok }` | offen |
+| core-os → `POST {n8n}/webhook/emma-approved` | Anstoß nach Freigabe (Header-Auth) | – | offen |
+| core-os → `POST {n8n}/webhook/metropolis-core` | Nachricht weiterreichen (`text`, `user_verified`) | `{ reply, proposals }` | offen |
+
+Solange diese Punkte offen sind, bricht jeder Workflow, der core-os braucht, sauber ab (fail-closed). Er arbeitet
+dann nicht mit einem Ersatzspeicher weiter.
+
+## Sicherheit
+
+- **Webhooks:** Alle verlangen Header-Auth über das Credential **„EMMA Webhook Auth“** (eigener, zufälliger Schlüssel).
+  Den n8n-API-Key dafür nicht wiederverwenden. Der Validator bricht bei Webhooks ohne Auth ab.
+- **Rechte im Code:** Der Orchestrator lässt Erinnerungen, Termine und Engines nur mit `user_verified: true` zu, und das
+  auch dann nur als Vorschlag. Kontext wird über eine feste core-os-Abfrage geholt, nie über einen Absender aus dem Body.
+- **Prompt-Injection:** Kalender-, Gedächtnis- und Chat-Inhalte stehen im Prompt als `<daten>`. Wacht der Loop über eine
+  selbst geplante Weckzeit auf, ist der Anlass ungeprüft, und `remember` ist gesperrt. Termine übernehmen nur Titel und
+  Zeit, nie Text von Aufrufern in die Beschreibung.
+- **Self-Builder:** Nur erlaubte Node-Typen: kein Code, kein Execute Command, kein beliebiger HTTP-Request, keine Webhooks.
+  Angelegt wird erst nach Freigabe und immer inaktiv.
+- **Öffentliches Repo:** keine Secrets, Chat-IDs oder internen Adressen. Konfiguration über Umgebungsvariablen (s. u.).
+  Der Validator prüft auf private IPs und fest eingetragene Chat-IDs. Die GitHub Action läuft mit `contents: read`.
+
+## KI-Budget (Schätzung!)
+
+- Alle KI-Nodes nutzen **Gemini 2.5 Flash** (Free Tier).
+- Vor **jedem** KI-Aufruf (Orchestrator, Loop, Engine Hub, Self-Builder mit 2 Aufrufen, Multi-Agent) steht derselbe
+  Budget-Check. Er ist fail-closed: Ist die Datenbank nicht erreichbar, gibt es keinen KI-Aufruf.
+- Jeder Aufruf wird in `llm_usage` mit **geschätzten** Kosten geloggt (Zeichen / 4 ≈ Token, Listenpreis).
+- Das Limit (Standard 5 €, `EMMA_BUDGET_EUR`) ist **nur so genau wie diese Schätzung**. Die echte Abrechnung zeigt nur die
+  Google-Cloud-Konsole. Dort zusätzlich einen Budget-Alarm setzen.
+
+## Arbeitsspuren (Google Drive → Emma → EMMA_ARBEITSSPUREN)
 
 | Ordner | Inhalt | Wann |
 |---|---|---|
-| `01_Briefings` | „Briefing JJJJ-MM-TT“: Gedanken, Termine, Plan, offene Aufgaben, Themen | täglich 07:00 |
-| `02_Wissen` | „Wissen – …“: Recherchen und Erkenntnisse (`write_note`) | wenn Emma etwas herausfindet |
-| `03_Entwuerfe` | „Entwurf – …“: Texte, Posts, Angebote (`write_draft`), werden **nicht** verschickt | bei Bedarf |
-| `04_Arbeitsprotokoll` | „Arbeitsprotokoll JJJJ-MM-TT“: jeder Denkzyklus mit Aktionen, erstellte Spuren, erledigte Aufgaben | täglich 21:30 |
-| Kalender „EMMA“ | „🧠 EMMA: …“: Emmas eigene Weckzeiten | laufend |
+| `01_Briefings` | „Briefing JJJJ-MM-TT“: Gedanken, Termine, Plan, offene Vorschläge und Aufgaben | 07:00 (abschaltbar: `EMMA_DAILY_DOCS=off`) |
+| `02_Wissen` | „Wissen – …“ | nach Freigabe eines `write_note`-Vorschlags |
+| `03_Entwuerfe` | „Entwurf – …“, wird nie verschickt | nach Freigabe eines `write_draft`-Vorschlags |
+| `04_Arbeitsprotokoll` | „Arbeitsprotokoll JJJJ-MM-TT“: Zyklen, Ergebnisse (✅/❌), Vorschläge, Spuren | 21:30 (abschaltbar wie oben) |
 
-Der Daily Report um 08:00 zeigt die Spuren der letzten 24 Stunden mit Link und den Budgetstand, z. B. „0,03 € von 5 €“.
-
-### Kanäle: was noch fehlt (Vorschläge für später)
-
-1. **E-Mail (IMAP/SMTP)** mit eigener Jarvis-Adresse: Mail-Sortierung, Entwürfe für Antworten (Phase 2)
-2. **WhatsApp Business**: der Webhook `metropolis-whatsapp` ist schon da, es fehlt der Zugang über die Meta-API
-3. **Google Kalender von Kunden, Buchungen aus dalino-app**: Termine automatisch ins Briefing
-4. **Sprachnachrichten in Telegram**: Transkription (kostet Tokens, erst mit Budget-Erfahrung)
-5. **Instagram/Facebook**: nur Entwürfe, Veröffentlichen immer mit Freigabe
-
-## Emmas inneres Leben (`EMMA_COGNITIVE_LOOP`)
-
-Emma prüft alle 15 Minuten, ob sie aufwachen soll:
-
-- **07:00 Morgen-Routine**: Tag planen, Irina eine Morgennachricht schicken (Plan, Termine, Themen).
-- **21:30 Abend-Reflexion** (früher `EMMA_DAILY_EVOLUTION`): Learnings festhalten, Erledigtes schließen, morgen planen.
-- **Zu jedem Termin im Kalender „EMMA“**: Emma setzt sich dort selbst Weckzeiten (`🧠 EMMA: …`).
-  Auch Irina kann dort einen Termin eintragen. Dann wacht Emma genau dann auf und liest Titel und Beschreibung als Auftrag.
-
-Beim Aufwachen liest sie ihr Gedächtnis, offene Aufgaben, Freigaben, ihre Agenda, die Gespräche der letzten 24h,
-den Austausch mit Jarvis und Irinas Termine. Dann entscheidet sie selbst, was sie tut:
-
-| Aktion | Was passiert |
-|---|---|
-| `schedule_wake` | Termin im EMMA-Kalender → Emma wacht dann wieder auf |
-| `create_task` / `complete_task` | Aufgaben verwalten |
-| `add_agenda` | Thema, das sie mit Irina besprechen will (erscheint im Report, in `/agenda` und im nächsten Gespräch) |
-| `remember` | Langzeitgedächtnis (Ziele, Entscheidungen, Strategien, Learnings, Personen, Vorlieben) |
-| `message_irina` | Telegram-Nachricht an Irina |
-| `write_note` / `write_draft` | Google-Doc in `02_Wissen` bzw. `03_Entwuerfe` (höchstens 3 pro Zyklus) |
-| `run_engine` | Eine Fach-Engine arbeiten lassen |
-| `ask_jarvis` | Jarvis um eine zweite Meinung bitten |
-| `request_approval` | Um Freigabe bitten → Irina antwortet mit `/ok 12` oder `/nein 12` |
-
-**Leitplanken:** Emma arbeitet frei, aber nicht grenzenlos.
-
-- maximal 6 Aktionen pro Zyklus
-- maximal 3 Nachrichten pro Tag, keine zwischen 22 und 7 Uhr
-- höchstens 2 Engine-Läufe pro Zyklus
-- Weckzeiten nur 10 Minuten bis 7 Tage im Voraus
-
-Alles, was Geld kostet, nach außen geht, Kunden kontaktiert oder nicht rückgängig zu machen ist, läuft über `request_approval`.
-Das entspricht dem früheren Council-500-Standard.
-
-### Gedächtnis: Postgres → Google Drive
-
-- Die Quelle ist Postgres (`emma_memory`, `emma_agenda`, `emma_cycles`, `agent_dialogue`, …).
-- Nach jedem Denkzyklus schreibt Emma ihr komplettes Gedächtnis nach **Google Drive** in die bestehende
-  `EMMA_memory.json` im EMMA-Ordner. Das Format ist wie bisher (`goals`, `decisions`, `strategies`, `learnings`, `tasks`, `conversations`, …),
-  ergänzt um `agenda_mit_irina`, `jarvis_dialogue`, `last_thoughts` und `next_wake`.
-- Für die Synology gibt es den deaktivierten Node „An Synology senden (optional)“. Er bekommt die Adresse, sobald
-  feststeht, welches System dort das Gedächtnis führt (siehe unten).
-
-## Jarvis (`EMMA_JARVIS`)
-
-Jarvis ist Emmas analytischer Gegenpart: präzise, ehrlich, widerspricht, wenn etwas nicht stimmt.
-Er **berät nur und handelt nicht selbst**. Emma entscheidet, Irina hat das letzte Wort.
-Der Austausch wird in `agent_dialogue` gespeichert, und Emma sieht ihn beim nächsten Nachdenken.
-Wichtige Hinweise von Jarvis landen in Emmas Gedächtnis.
-
-- Emma fragt Jarvis selbst (`ask_jarvis`) oder leitet komplexe Fragen im Chat an ihn weiter.
-- Optional kann Irina Jarvis direkt schreiben: Node `JARVIS_TELEGRAM_IN` aktivieren. Dafür braucht Jarvis einen **eigenen** Bot.
-  Nur Irinas Chat-ID wird beantwortet.
-- Der importierte Jarvis-Code auf der Synology (`jarvis_lab`, Status `QUARANTINED / READ_ONLY`) bleibt davon unberührt.
-  Dieser n8n-Jarvis nutzt ihn nicht und hat keine Zugänge zu Secrets.
-
-## Telegram
-
-| Bot | n8n-Credential | Genutzt von |
-|---|---|---|
-| EMMA WORLDMASTER OS (@WorldMaster_Bot) | `telegram` | Orchestrator, Cognitive Loop, Daily Report |
-| Jarvis (eigener Bot) | `telegram 2` | `EMMA_JARVIS` (Node ist bis zur Zuordnung deaktiviert) |
-| Worldmaster Nor-Bot, Nova, Alpha_trade_bot | – | eigene Systeme, hier nicht verwendet |
-
-Die Dateien `telegram.txt` und `telegram 2.txt` in „Emma Wichtig !“ sind leer. Das ist richtig so, Tokens gehören nur in
-die n8n-Credentials. Prüfe beim Import, dass die Credential `telegram` wirklich @WorldMaster_Bot ist, z. B. in n8n mit „Test“.
-Pro Bot darf nur **ein** Empfänger aktiv sein (siehe „Vor dem Aktivieren klären“).
-
-**Befehle an Emma:** `/agenda` (Themen, Aufgaben, Freigaben) · `/ok 12` · `/nein 12` · `/erledigt 7`
-
-## Vor dem Aktivieren klären
-
-Laut `EMMA_ARCHITECTURE.md` und `N8N_WORKFLOW_KARTE.md` (Stand 14.–23.09.2026) gibt es schon mehrere Systeme,
-die dasselbe tun wollen:
-
-1. **Ein Haupteingang für @WorldMaster_Bot.** Schon heute lesen `emma-telegram-worker` (emma-core-os) und
-   `EMMA_SUPERNOVA_METROPOLE_BACKOFFICE_V?` (`CEO_TELEGRAM_IN`) Telegram mit. Ein Bot kann aber nur **einen** Empfänger haben:
-   Webhook und Polling schließen sich aus, zwei Empfänger bedeuten Doppelantworten oder verlorene Nachrichten.
-   Erst entscheiden, wer antwortet. Danach `CEO_TELEGRAM_IN` hier nur aktivieren, wenn es dieser Orchestrator sein soll.
-2. **Eine Wahrheit für Gedächtnis, Aufgaben und Freigaben.** emma-core-os hat eine eigene Postgres-Datenbank (Port 5434) mit Memory,
-   Tasks und Approval-Gate. Die Tabellen in `schema.sql` dürfen keine zweite, abweichende Wahrheit werden. Entweder
-   zeigt die Postgres-Credential in n8n auf **dieselbe** Datenbank wie core-os (Tabellen abgleichen), oder der Cognitive Loop
-   ruft die core-os-API statt eigener Tabellen auf.
-3. **Jarvis:** Laut `JARVIS_LAB_STATE.json` gibt es schon einen Jarvis als Mentor in core-os (nur lesend, unter Quarantäne).
-   `EMMA_JARVIS` hier ist ein reiner n8n-Berater ohne eigene Aktionen. Entscheiden, ob beide gewollt sind oder ob Emma den core-os-Jarvis fragen soll.
-
-## Phase 1 in 10 Minuten live
-
-Phase 1 braucht keine Entscheidung zum Telegram-Eingang, denn Emma **sendet** nur.
-
-1. **Datenbank:** `schema.sql` in der Postgres-DB ausführen, die n8n nutzt. Das Script ist idempotent.
-2. **Importieren:** `EMMA_COGNITIVE_LOOP.json`, `EMMA_DAILY_REPORT.json`, `EMMA_ENGINE_HUB.json`, `EMMA_JARVIS.json`.
-3. **Zugangsdaten** in diesen vier Workflows zuordnen: Gemini, Postgres, `telegram` (@WorldMaster_Bot, nur zum Senden),
-   Google Calendar, Google Drive. Im Report zusätzlich Header Auth (n8n-API-Key).
-4. **Sub-Workflows verknüpfen:** Im Cognitive Loop bei „Engine ausführen“ `EMMA_ENGINE_HUB` und bei „Jarvis fragen“
-   `EMMA_JARVIS` auswählen.
-5. **Testen:** Im Cognitive Loop auf **„Test workflow“** klicken (Knoten „Jetzt testen (Briefing)“). Erwartet:
-   - ein Google-Doc „Briefing JJJJ-MM-TT“ in `Emma/EMMA_ARBEITSSPUREN/01_Briefings`
-   - eine Morgennachricht von Emma in Telegram
-   - ein Termin „🧠 EMMA: …“ im Kalender „EMMA“
-   Danach im Daily Report ebenfalls „Test workflow“ klicken. Die Spuren erscheinen dort mit Link.
-6. **Aktivieren:** Cognitive Loop und Daily Report auf **Active** schalten. Ab dann gibt es täglich um 07:00 ein Briefing,
-   um 08:00 den Report und um 21:30 ein Arbeitsprotokoll.
-
-Solange der Telegram-Eingang aus ist, funktionieren `/ok`, `/nein`, `/erledigt` und `/agenda` noch nicht. Freigaben bleiben
-dann offen und stehen im Daily Report. Emma führt nichts Freigabepflichtiges aus, bevor du zustimmst.
+Briefing und Protokoll werden ohne Freigabe geschrieben. Sie landen nur in diesem eigenen Ordner und sind die vom
+Nutzer gewünschte sichtbare Spur. Soll auch das erst nach Freigabe passieren, `EMMA_DAILY_DOCS=off` setzen.
 
 ## Einrichten
 
-1. `schema.sql` in Postgres ausführen. Das Script ist idempotent, bestehende Daten bleiben erhalten.
-2. Die 8 JSON-Dateien importieren und bei jedem Node die Credentials prüfen: Gemini, Postgres, `telegram`/`telegram 2`,
-   Google Calendar, Google Drive und Header Auth mit `X-N8N-API-KEY` für die n8n-API.
-3. In diesen Nodes den Ziel-Workflow auswählen:
-   - Orchestrator: `EXECUTE_ENGINE` → `EMMA_ENGINE_HUB`, `EXECUTE_JARVIS` → `EMMA_JARVIS`
-   - Cognitive Loop: `Engine ausführen` → `EMMA_ENGINE_HUB`, `Jarvis fragen` → `EMMA_JARVIS`
-4. Alte Workflows erst deaktivieren und nach ein paar Tagen löschen (siehe unten).
-5. Erst nach der Klärung oben: `CEO_TELEGRAM_IN` aktivieren und den Orchestrator aktiv schalten.
-   Engine Hub und Jarvis laufen als Sub-Workflows mit.
+1. **Umgebungsvariablen** im n8n-Container setzen (nicht ins Repo):
+   - `EMMA_CORE_OS_URL`: Basis-URL von core-os
+   - optional `EMMA_BUDGET_EUR` (Standard 5) und `EMMA_DAILY_DOCS` (`on`/`off`)
+   - Nötig ist außerdem, dass Code-Nodes auf Umgebungsvariablen zugreifen dürfen (`N8N_BLOCK_ENV_ACCESS_IN_NODE=false`).
+     Ohne diese Freigabe bricht jeder Lauf mit „EMMA_CORE_OS_URL ist nicht gesetzt“ ab. Die Alternative: den Wert im
+     Node „Konfiguration“ direkt in n8n eintragen, aber nie zurück ins Repo.
+2. **Datenbank:** `schema.sql` ausführen (idempotent).
+3. **Credentials** in n8n anlegen und zuordnen: Gemini, Postgres, Google Calendar, Google Drive, **EMMA Webhook Auth**
+   (Header Auth für eingehende Webhooks), **core-os API** (Header Auth für Aufrufe an core-os), Header Auth mit n8n-API-Key
+   (nur Executor, zum Anlegen freigegebener Workflows).
+4. **Sub-Workflows verknüpfen** in allen `Execute Workflow`-Nodes: `EMMA_ENGINE_HUB`, `EMMA_PROPOSE`,
+   `EMMA_APPROVED_EXECUTOR`, `EMMA_WAKE_TIMER`, `EMMA_COGNITIVE_LOOP`.
+5. **Erst wenn die core-os-Endpunkte bestätigt sind:** im Loop „Jetzt testen (Briefing)“ ausführen, danach aktivieren.
+
+## Offene Punkte
+
+- core-os-Endpunkte oben abgleichen oder in core-os ergänzen.
+- core-os muss nach einer Freigabe `emma-approved` aufrufen (oder der Executor läuft nur um 07:00 und 21:30).
+- Alte Tabellen `emma_memory`, `emma_tasks`, `emma_approvals`, `emma_agenda`, `interaction_memory` aus früheren
+  Schema-Versionen: nach core-os übernehmen oder löschen. Das entscheidet der Nutzer, das Schema löscht nichts.
+- Tagesreport von core-os (20:00) könnte `emma_artifacts` und `llm_usage` mit anzeigen. Dafür bräuchte core-os Lesezugriff.
 
 ## Alte Workflows: was wo weiterlebt
 
 Das stammt aus `ALL_WORKFLOWS_BACKUP.json` (Stand Mai, 75 Workflows). Live laufen laut `N8N_WORKFLOW_KARTE.md` (14.09.)
-237 Workflows, davon 35 aktiv. Namen aus dem Backup gelten sinngemäß auch für die gleichnamigen Live-Workflows, aber:
-**nichts löschen, was nicht in dieser Liste steht, und vorher in n8n exportieren.**
-
-**Übernommen, danach löschen:**
+237 Workflows. **Nichts löschen, was nicht in dieser Liste steht, und vorher in n8n exportieren.**
 
 | Alt | Lebt weiter in |
 |---|---|
 | alle `*_ENGINE_V700`, `*_ENGINE_V14`, `EMMA_C500_*_ENGINE_*`, `SUPERNOVA_ENGINE_*`, `EMMA_SUPERNOVA_V∞`, `METROPOLIS_DYNAMIC_ENGINE`, `INTELLIGENCE_SECURITY_V1000` | `EMMA_ENGINE_HUB` |
-| `EMMA_DECISION_ENGINE` | `EMMA_JARVIS` |
-| `METROPOLIS_MASTER_ORCHESTRATOR_*`, `EMMA_MASTER_ORCHESTRATOR_V2_ULTIMATE`, `EMMA_CLOUD_OS_V1/V2`, `EMMA_WORLDMASTER_SCO`, `EMMA_SUPERNOVA_MASTER_BRAIN` | `EMMA_MASTER_ORCHESTRATOR` |
-| `EMMA_CALENDAR_SIMPLE`, `EMMA_CALENDAR_MANAGER_FIXED` | Orchestrator legt Termine direkt an (auch wiederkehrend) |
+| `METROPOLIS_MASTER_ORCHESTRATOR_*`, `EMMA_MASTER_ORCHESTRATOR_V2_ULTIMATE`, `EMMA_CLOUD_OS_V1/V2`, `EMMA_WORLDMASTER_SCO`, `EMMA_SUPERNOVA_MASTER_BRAIN` | `EMMA_MASTER_ORCHESTRATOR` (als Anhängsel von core-os) |
+| `EMMA_CALENDAR_SIMPLE`, `EMMA_CALENDAR_MANAGER_FIXED` | Termin-Vorschläge über Orchestrator und Executor |
 | `EMMA_DAILY_EVOLUTION` | Abend-Reflexion im `EMMA_COGNITIVE_LOOP` |
-| `EMMA_MEMORY_ENGINE`, `EMMA_MEMORY_SYNC`, `EMMA_CONTEXT_ENGINE`, `VECTOR_MEMORY_ENGINE` | Gedächtnis in Loop und Orchestrator |
-| `EMMA_COUNCIL_500_TEMPLATE` | Freigaben (`request_approval`, `/ok`, `/nein`) |
-| `WF_02_Daily_Mayor_Briefing`, `WF_03_Hourly_Pulse_Check` | `EMMA_DAILY_REPORT` + Morgen-Routine |
+| `EMMA_MEMORY_ENGINE`, `EMMA_MEMORY_SYNC`, `EMMA_CONTEXT_ENGINE`, `VECTOR_MEMORY_ENGINE` | core-os (Gedächtnis) |
+| `EMMA_COUNCIL_500_TEMPLATE` | Freigabe-Ablauf über core-os |
+| `WF_02_Daily_Mayor_Briefing`, `WF_03_Hourly_Pulse_Check` | Tagesreport von core-os + Briefing-Dokument |
 | `EMMA_AGENT_HUB` | `METROPOLIS_MULTI_AGENT_CORE` |
 | `CRM_ENGINE_V700_CLOUD`, `LOGGING_ENGINE`, `METROPOLIS_KPI_REGISTRY`, `METROPOLIS_V14_SYNC_BRIDGE` | `METROPOLIS_DATA_GATEWAY` |
 | `EMMA_SELF_BUILDER_*`, `EMMA_WORKFLOW_CREATOR`, alle `EMMA_COGNITIVE_*` | `EMMA_SELF_BUILDER` |
 | leere Hüllen: `LOCAL_AGENT_V2`, `pc_action_node…`, `My_Sub_Workflow_3`, `FINANZMOTOR_V700`, `EMMA_SUPERVISOR_V1` | hatten keine Funktion |
 
-**Behalten, weil sie eine eigene Aufgabe haben** (von Duplikaten nur **eine** Kopie):
-
-`SYNCHRONISIERE_SHOPIFY_MIT`, `TÄGLICHER_SALES_REPORT`, `ERSTELLE_EMAIL-AUTOMATION` (sieht aus wie der Sales-Report, bitte vergleichen),
-`CONTENT_MEDIA_ENGINE`, `CONTENT_MEDIA_ADS_ENGINE`, `WF_11_Product_Listing_Factory`, `WF_15_Revenue_Discovery_Cluster`,
+**Behalten, weil sie eine eigene Aufgabe haben** (von Duplikaten nur eine Kopie): `SYNCHRONISIERE_SHOPIFY_MIT`,
+`TÄGLICHER_SALES_REPORT`, `ERSTELLE_EMAIL-AUTOMATION` (mit dem Sales-Report vergleichen), `CONTENT_MEDIA_ENGINE`,
+`CONTENT_MEDIA_ADS_ENGINE`, `WF_11_Product_Listing_Factory`, `WF_15_Revenue_Discovery_Cluster`,
 `WF_16_Conversion_Offer_Engine`, `WF_21_Email_Funnel_Automator`, `WF_22_Partnership_Affiliate_Scout`,
-`EMMA_AI_BUSINESS_MASTER`, `EMMA_STATUS_REPORT_IMMO`, `EMMA_CALENDAR_QUICK_FIX` (ändert Termine),
-`CRM_ENGINE_V700` (Google-Sheets-CRM), `EMMA_SKILLS_SH_DAILY_WATCHER`.
-Achtung: `EMMA_C500_CORE_EMMA_SUPERNOVA_V_` (Telegram-Verkaufs-Funnel) hat einen eigenen Telegram-Trigger.
-Er darf nicht am selben Bot hängen wie der Orchestrator.
+`EMMA_AI_BUSINESS_MASTER`, `EMMA_STATUS_REPORT_IMMO`, `EMMA_CALENDAR_QUICK_FIX`, `CRM_ENGINE_V700` (Google-Sheets-CRM),
+`EMMA_SKILLS_SH_DAILY_WATCHER`. Workflows mit eigenem Telegram-Trigger (z. B. `EMMA_C500_CORE_EMMA_SUPERNOVA_V_`)
+dürfen nicht an @WorldMaster_Bot hängen, denn einziger Empfänger ist core-os.
 
-**Google-Kalender:** Es gibt über 30 Kalender „EMMA | …“, einen pro altem Workflow, viele doppelt. Genutzt wird nur noch
-der Kalender **„EMMA“**. Die anderen können weg, sobald die alten Workflows gelöscht sind.
+**Google-Kalender:** Es gibt über 30 Kalender „EMMA | …“, einen pro altem Workflow. Genutzt wird nur noch „EMMA“.
 
 ## Prüfen
 
@@ -213,5 +163,6 @@ der Kalender **„EMMA“**. Die anderen können weg, sobald die alten Workflows
 python3 tools/validate_workflows.py
 ```
 
-Das Script prüft kaputte Verbindungen, doppelte Workflow-Namen und Webhook-Pfade, abgeschaltete Gemini-Modelle und
-SQL mit direkt eingesetzten Werten. Es läuft auch automatisch als GitHub Action.
+Das Script prüft kaputte Verbindungen, doppelte Namen und Webhook-Pfade, Webhooks ohne Auth, Telegram-Trigger,
+abgeschaltete Modelle, SQL-Injection-Muster, Zugriffe auf core-os-Tabellen, private IPs und Chat-IDs.
+Es läuft auch automatisch als GitHub Action.

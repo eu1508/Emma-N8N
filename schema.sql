@@ -1,52 +1,75 @@
--- EMMA / Metropolis – Postgres-Schema für alle Workflows.
+-- EMMA / Metropolis – Postgres-Schema der n8n-Seite.
 -- Idempotent: kann beliebig oft ausgeführt werden, bestehende Daten bleiben erhalten.
+--
+-- WICHTIG: Gedächtnis, Aufgaben, Freigaben, Agenda und Chatverlauf gehören core-os.
+-- Dafür gibt es hier bewusst KEINE Tabellen (kein zweites Gedächtnis). n8n spricht dafür die core-os-API an.
+-- Wer frühere Versionen dieses Schemas ausgeführt hat, hat evtl. noch emma_memory, emma_tasks, emma_approvals,
+-- emma_agenda, interaction_memory. Sie werden nicht mehr benutzt und hier absichtlich NICHT gelöscht.
+-- Übernahme nach core-os und Löschen entscheidet der Nutzer.
 
-CREATE TABLE IF NOT EXISTS interaction_memory (
-  id          bigserial PRIMARY KEY,
-  session_id  text,
-  user_id     text,
-  channel     text,
-  input       text,
-  created_at  timestamptz NOT NULL DEFAULT now()
-);
-ALTER TABLE interaction_memory ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
-ALTER TABLE interaction_memory ADD COLUMN IF NOT EXISTS output text;   -- Emmas Antwort, für Gesprächsgedächtnis
-CREATE INDEX IF NOT EXISTS interaction_memory_user_idx ON interaction_memory (user_id, created_at);
-
--- Jeder Lauf des EMMA_ENGINE_HUB (ersetzt die vielen *_ENGINE-Workflows).
+-- ---------------------------------------------------------------- Betriebsprotokolle der n8n-Seite
+-- Jeder Lauf des EMMA_ENGINE_HUB.
 CREATE TABLE IF NOT EXISTS engine_runs (
   id          bigserial PRIMARY KEY,
   engine      text NOT NULL,
   session_id  text,
-  sender      text,
   input       text,
   output      jsonb,
   risk_level  text NOT NULL DEFAULT 'LOW',   -- LOW | MEDIUM | HIGH
   status      text NOT NULL DEFAULT 'ok',    -- ok | no_json | parse_error
   created_at  timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE engine_runs ADD COLUMN IF NOT EXISTS session_id text;
 CREATE INDEX IF NOT EXISTS engine_runs_created_at_idx ON engine_runs (created_at);
 
-CREATE TABLE IF NOT EXISTS emma_tasks (
-  id             bigserial PRIMARY KEY,
-  title          text NOT NULL,
-  source_engine  text,
-  run_id         bigint REFERENCES engine_runs (id) ON DELETE SET NULL,
-  status         text NOT NULL DEFAULT 'open',   -- open | done
-  created_at     timestamptz NOT NULL DEFAULT now(),
-  done_at        timestamptz
+-- Denkzyklen von EMMA_COGNITIVE_LOOP (was gedacht und geplant wurde).
+CREATE TABLE IF NOT EXISTS emma_cycles (
+  id            bigserial PRIMARY KEY,
+  mode          text,                 -- MORNING | EVENING | WAKE
+  wake_events   jsonb,
+  thoughts      text,
+  actions       jsonb,
+  next_wake_at  timestamptz,
+  created_at    timestamptz NOT NULL DEFAULT now()
 );
 
--- HIGH-Risk-Ergebnisse landen hier und warten auf Irinas Freigabe.
-CREATE TABLE IF NOT EXISTS emma_approvals (
-  id          bigserial PRIMARY KEY,
-  run_id      bigint REFERENCES engine_runs (id) ON DELETE SET NULL,
-  engine      text,
-  reason      text,
-  status      text NOT NULL DEFAULT 'pending',  -- pending | approved | rejected
-  created_at  timestamptz NOT NULL DEFAULT now(),
-  decided_at  timestamptz
+-- Ergebnis jeder einzelnen Aktion – Fehler werden als Fehler geloggt, nicht als erledigt.
+CREATE TABLE IF NOT EXISTS emma_action_log (
+  id           bigserial PRIMARY KEY,
+  cycle_id     bigint,
+  action_type  text NOT NULL,
+  ok           boolean NOT NULL,
+  detail       text,
+  created_at   timestamptz NOT NULL DEFAULT now()
 );
+CREATE INDEX IF NOT EXISTS emma_action_log_created_idx ON emma_action_log (created_at);
+
+-- Ausführungswarteschlange für Vorschläge. Die ENTSCHEIDUNG liegt in core-os (core_os_approval_id);
+-- hier liegt nur, WAS nach der Freigabe ausgeführt werden soll, und das Ergebnis.
+CREATE TABLE IF NOT EXISTS n8n_action_queue (
+  id                   bigserial PRIMARY KEY,
+  kind                 text NOT NULL,   -- run_engine | write_note | write_draft | calendar_event | create_workflow
+  summary              text NOT NULL,
+  payload              jsonb NOT NULL DEFAULT '{}'::jsonb,
+  source               text,
+  core_os_approval_id  text,
+  status               text NOT NULL DEFAULT 'proposed',   -- proposed | running | done | failed
+  result               text,
+  created_at           timestamptz NOT NULL DEFAULT now(),
+  started_at           timestamptz,
+  finished_at          timestamptz
+);
+CREATE INDEX IF NOT EXISTS n8n_action_queue_status_idx ON n8n_action_queue (status, core_os_approval_id);
+
+-- Sichtbare Arbeitsspuren (Briefings, Protokolle, Notizen, Entwürfe, Kalendereinträge) mit Link.
+CREATE TABLE IF NOT EXISTS emma_artifacts (
+  id          bigserial PRIMARY KEY,
+  kind        text NOT NULL,     -- briefing | protokoll | wissen | entwurf | kalender
+  title       text,
+  url         text,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS emma_artifacts_created_idx ON emma_artifacts (created_at);
 
 -- Log- und Sync-Events aus METROPOLIS_DATA_GATEWAY.
 CREATE TABLE IF NOT EXISTS emma_events (
@@ -58,6 +81,7 @@ CREATE TABLE IF NOT EXISTS emma_events (
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 
+-- ---------------------------------------------------------------- Geschäftsdaten
 CREATE TABLE IF NOT EXISTS crm_leads (
   id              bigserial PRIMARY KEY,
   name            text,
@@ -79,6 +103,7 @@ CREATE TABLE IF NOT EXISTS kpi_metrics (
   created_at   timestamptz NOT NULL DEFAULT now()
 );
 
+-- Vom Self-Builder entworfene Workflows. Angelegt (inaktiv) werden sie erst nach Freigabe in core-os.
 CREATE TABLE IF NOT EXISTS workflow_registry (
   id             bigserial PRIMARY KEY,
   workflow_id    text,
@@ -86,66 +111,16 @@ CREATE TABLE IF NOT EXISTS workflow_registry (
   workflow_json  jsonb,
   purpose        text,
   created_by     text,
+  status         text NOT NULL DEFAULT 'pending_approval',   -- pending_approval | created_inactive | failed
   created_at     timestamptz NOT NULL DEFAULT now()
 );
 ALTER TABLE workflow_registry ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
+ALTER TABLE workflow_registry ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'pending_approval';
 
-CREATE TABLE IF NOT EXISTS self_modification_log (
-  id                 bigserial PRIMARY KEY,
-  modification_type  text,
-  target             text,
-  after_state        jsonb,
-  reasoning          text,
-  created_at         timestamptz NOT NULL DEFAULT now()
-);
-
--- ---------------------------------------------------------------- Emmas inneres Leben
--- Langzeitgedächtnis (wird nach jedem Denkzyklus als EMMA_memory.json nach Google Drive exportiert).
-CREATE TABLE IF NOT EXISTS emma_memory (
-  id          bigserial PRIMARY KEY,
-  category    text NOT NULL,          -- goals | decisions | strategies | market_intel | learnings | people | preferences
-  content     text NOT NULL,
-  importance  int NOT NULL DEFAULT 3, -- 1 (Detail) … 5 (zentral)
-  source      text,                   -- CHAT | SELF | JARVIS
-  created_at  timestamptz NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS emma_memory_rank_idx ON emma_memory (importance DESC, created_at DESC);
-
--- Themen, die Emma mit Irina besprechen möchte.
-CREATE TABLE IF NOT EXISTS emma_agenda (
-  id          bigserial PRIMARY KEY,
-  topic       text NOT NULL,
-  reason      text,
-  status      text NOT NULL DEFAULT 'open',   -- open | done
-  created_at  timestamptz NOT NULL DEFAULT now(),
-  done_at     timestamptz
-);
-
--- Jeder Denkzyklus von EMMA_COGNITIVE_LOOP.
-CREATE TABLE IF NOT EXISTS emma_cycles (
-  id            bigserial PRIMARY KEY,
-  mode          text,                 -- MORNING | EVENING | WAKE | MANUAL
-  wake_events   jsonb,
-  thoughts      text,
-  actions       jsonb,
-  next_wake_at  timestamptz,
-  created_at    timestamptz NOT NULL DEFAULT now()
-);
-
--- Gespräche zwischen EMMA, JARVIS und IRINA.
-CREATE TABLE IF NOT EXISTS agent_dialogue (
-  id          bigserial PRIMARY KEY,
-  from_agent  text NOT NULL,
-  to_agent    text NOT NULL,
-  message     text,
-  meta        jsonb,
-  created_at  timestamptz NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS agent_dialogue_created_idx ON agent_dialogue (created_at);
-
--- ---------------------------------------------------------------- Budget (Phase 1: 0 €, hartes Limit 5 €)
--- Jeder KI-Aufruf wird mit geschätzten Kosten protokolliert. Im Free Tier kostet es real 0 €;
--- die Schätzung schützt davor, dass bei aktivierter Abrechnung unbemerkt Kosten entstehen.
+-- ---------------------------------------------------------------- KI-Budget (geschätzt!)
+-- Jeder KI-Aufruf wird mit GESCHÄTZTEN Kosten protokolliert. Das Limit (Standard 5 €, EMMA_BUDGET_EUR) ist nur so
+-- genau wie diese Schätzung: Zeichenzahl / 4 ≈ Token, Listenpreis Gemini 2.5 Flash. Im Free Tier sind die echten
+-- Kosten 0 €. Die tatsächliche Abrechnung steht nur in der Google-Cloud-Konsole. Dort zusätzlich ein Budget-Alarm setzen.
 CREATE TABLE IF NOT EXISTS llm_usage (
   id             bigserial PRIMARY KEY,
   workflow       text,
@@ -163,19 +138,8 @@ LANGUAGE sql IMMUTABLE AS $$
   SELECT round((COALESCE(in_chars, 0) / 4.0 * 0.30 + COALESCE(out_chars, 0) / 4.0 * 2.50) / 1000000, 6)
 $$;
 
--- Geschätzte Kosten im laufenden Monat. Alle Workflows prüfen vor jedem KI-Aufruf gegen das Limit (5 €).
+-- Geschätzte Kosten im laufenden Monat. Jeder Workflow prüft das VOR jedem KI-Aufruf (fail-closed).
 CREATE OR REPLACE FUNCTION emma_budget_spent() RETURNS numeric
 LANGUAGE sql STABLE AS $$
   SELECT COALESCE(sum(est_cost_eur), 0) FROM llm_usage WHERE created_at >= date_trunc('month', now())
 $$;
-
--- ---------------------------------------------------------------- Sichtbare Arbeitsspuren
--- Alles, was Emma sichtbar hinterlässt: Briefings, Protokolle, Notizen, Entwürfe, Kalendereinträge.
-CREATE TABLE IF NOT EXISTS emma_artifacts (
-  id          bigserial PRIMARY KEY,
-  kind        text NOT NULL,     -- briefing | protokoll | wissen | entwurf | kalender
-  title       text,
-  url         text,
-  created_at  timestamptz NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS emma_artifacts_created_idx ON emma_artifacts (created_at);
