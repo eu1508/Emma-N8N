@@ -19,8 +19,18 @@
       "position": [
         0,
         300
-      ],
-      "disabled": true
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "c918a54d-8028-59ff-bf7c-d7bd982d62cb",
+      "name": "Jetzt testen (Briefing)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        700
+      ]
     },
     {
       "parameters": {
@@ -70,7 +80,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Emma wacht auf: morgens 07:00, abends 21:30, zu jedem Termin im EMMA-Kalender – oder wenn man sie weckt.\nconst now = Date.now();\nconst berlin = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Berlin' }));\nconst hm = berlin.getHours() * 60 + berlin.getMinutes();\nconst events = $('Weckzeiten im EMMA-Kalender').all().map(i => i.json)\n  .filter(e => e.id && e.start?.dateTime)\n  .filter(e => { const t = Date.parse(e.start.dateTime); return t > now - 15 * 60000 && t <= now + 60000; });\n\nlet mode = null;\nif (hm >= 7 * 60 && hm < 7 * 60 + 15) mode = 'MORNING';\nelse if (hm >= 21 * 60 + 30 && hm < 21 * 60 + 45) mode = 'EVENING';\nelse if (events.length) mode = 'WAKE';\nif ($('Manuell wecken').isExecuted) mode = mode || 'MANUAL';\nif (!mode) return [];\n\nreturn [{ json: {\n  mode,\n  wake_events: events.map(e => ({ title: e.summary || '', description: e.description || '', start: e.start.dateTime })),\n  manual_reason: $('Manuell wecken').isExecuted ? String($('Manuell wecken').first().json.reason || '') : '',\n} }];"
+        "jsCode": "// Emma wacht auf: morgens 07:00, abends 21:30, zu jedem Termin im EMMA-Kalender – oder wenn man sie weckt.\nconst now = Date.now();\nconst berlin = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Berlin' }));\nconst hm = berlin.getHours() * 60 + berlin.getMinutes();\nconst events = $('Weckzeiten im EMMA-Kalender').all().map(i => i.json)\n  .filter(e => e.id && e.start?.dateTime)\n  .filter(e => { const t = Date.parse(e.start.dateTime); return t > now - 15 * 60000 && t <= now + 60000; });\n\nlet mode = null;\nif (hm >= 7 * 60 && hm < 7 * 60 + 15) mode = 'MORNING';\nelse if (hm >= 21 * 60 + 30 && hm < 21 * 60 + 45) mode = 'EVENING';\nelse if (events.length) mode = 'WAKE';\nif ($('Manuell wecken').isExecuted) mode = mode || 'MANUAL';\nif ($('Jetzt testen (Briefing)').isExecuted) mode = 'MORNING';  // Test-Knopf in n8n: sofort ein Morgen-Briefing\nif (!mode) return [];\n\nreturn [{ json: {\n  mode,\n  wake_events: events.map(e => ({ title: e.summary || '', description: e.description || '', start: e.start.dateTime })),\n  manual_reason: $('Manuell wecken').isExecuted ? String($('Manuell wecken').first().json.reason || '') : '',\n} }];"
       },
       "id": "6d399215-39d0-5186-bc7c-d8d2d9c122aa",
       "name": "Aufwachen?",
@@ -1083,6 +1093,17 @@
   ],
   "connections": {
     "Herzschlag (15 min)": {
+      "main": [
+        [
+          {
+            "node": "Weckzeiten im EMMA-Kalender",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jetzt testen (Briefing)": {
       "main": [
         [
           {

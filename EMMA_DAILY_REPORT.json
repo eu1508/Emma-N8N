@@ -22,6 +22,17 @@
       ]
     },
     {
+      "parameters": {},
+      "id": "86c45edc-8de7-5446-95bd-9c85ade635cb",
+      "name": "Jetzt testen",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        600
+      ]
+    },
+    {
       "parameters": {
         "operation": "executeQuery",
         "query": "SELECT\n  (SELECT count(*) FROM interaction_memory WHERE created_at >= now() - interval '24 hours') AS msgs_24h,\n  (SELECT count(*) FROM interaction_memory WHERE created_at >= now() - interval '48 hours' AND created_at < now() - interval '24 hours') AS msgs_prev,\n  (SELECT max(created_at) FROM interaction_memory) AS last_msg_at,\n  (SELECT count(*) FROM engine_runs WHERE created_at >= now() - interval '24 hours') AS runs_24h,\n  (SELECT count(*) FROM engine_runs WHERE created_at >= now() - interval '48 hours' AND created_at < now() - interval '24 hours') AS runs_prev,\n  (SELECT count(*) FROM engine_runs WHERE created_at >= now() - interval '24 hours' AND status <> 'ok') AS runs_failed_24h,\n  (SELECT count(*) FROM engine_runs WHERE created_at >= now() - interval '24 hours' AND risk_level = 'HIGH') AS high_risk_24h,\n  (SELECT count(*) FROM emma_events WHERE created_at >= now() - interval '24 hours' AND level IN ('ERROR', 'CRITICAL')) AS error_events_24h,\n  (SELECT count(*) FROM emma_approvals WHERE status = 'pending') AS approvals_pending,\n  (SELECT count(*) FROM emma_approvals WHERE status = 'pending' AND created_at < now() - interval '48 hours') AS approvals_stale,\n  (SELECT count(*) FROM emma_tasks WHERE status = 'open') AS tasks_open,\n  (SELECT count(*) FROM emma_tasks WHERE created_at >= now() - interval '24 hours') AS tasks_new_24h,\n  (SELECT count(*) FROM crm_leads WHERE created_at >= now() - interval '24 hours') AS leads_24h,\n  (SELECT COALESCE(json_agg(t), '[]') FROM (\n     SELECT engine, count(*) AS n FROM engine_runs WHERE created_at >= now() - interval '24 hours'\n     GROUP BY engine ORDER BY n DESC LIMIT 4) t) AS top_engines,\n  (SELECT COALESCE(json_agg(t), '[]') FROM (\n     SELECT engine, left(input, 70) AS input FROM engine_runs\n     WHERE created_at >= now() - interval '24 hours' AND risk_level = 'HIGH' ORDER BY created_at DESC LIMIT 3) t) AS high_risk_items,\n  (SELECT COALESCE(json_agg(t), '[]') FROM (\n     SELECT left(title, 70) AS title, created_at FROM emma_tasks WHERE status = 'open' ORDER BY created_at ASC LIMIT 3) t) AS oldest_tasks,\n  (SELECT COALESCE(json_agg(a), '[]') FROM (\n     SELECT left(topic, 80) AS topic FROM emma_agenda WHERE status = 'open' ORDER BY created_at LIMIT 3) a) AS agenda,\n  (SELECT count(*) FROM emma_cycles WHERE created_at >= now() - interval '24 hours') AS cycles_24h,\n  (SELECT left(thoughts, 200) FROM emma_cycles ORDER BY created_at DESC LIMIT 1) AS last_thought,\n  (SELECT min(next_wake_at) FROM emma_cycles WHERE next_wake_at > now()) AS next_wake,\n  (SELECT count(*) FROM agent_dialogue WHERE (from_agent = 'JARVIS' OR to_agent = 'JARVIS') AND created_at >= now() - interval '24 hours') / 2 AS jarvis_24h,\n  (SELECT count(*) FROM emma_memory WHERE created_at >= now() - interval '24 hours') AS memories_24h,\n  (SELECT COALESCE(json_agg(a ORDER BY a.created_at DESC), '[]') FROM (\n     SELECT kind, title, url, created_at FROM emma_artifacts WHERE created_at >= now() - interval '24 hours'\n     ORDER BY created_at DESC LIMIT 8) a) AS artifacts,\n  (SELECT count(*) FROM emma_artifacts WHERE created_at >= now() - interval '24 hours') AS artifacts_24h,\n  emma_budget_spent() AS spent_month,\n  (SELECT count(*) FROM llm_usage WHERE created_at >= date_trunc('month', now())) AS llm_calls_month;",
@@ -152,6 +163,17 @@
   ],
   "connections": {
     "Täglich 08:00": {
+      "main": [
+        [
+          {
+            "node": "Collect Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jetzt testen": {
       "main": [
         [
           {

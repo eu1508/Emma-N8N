@@ -2,8 +2,9 @@
 
 > **Status: GEBAUT, nicht LIVE.** Die Dateien sind geprüft (Validator, Syntax, Logik mit Testdaten), aber noch nicht
 > in der produktiven n8n-Instanz (self-hosted, Ubuntu-VM auf der Synology, `100.79.103.114:5678`) ausgeführt worden.
-> Der Telegram-Eingang des Orchestrators und der Herzschlag des Cognitive Loop sind **absichtlich deaktiviert**,
-> bis die Fragen unter „Vor dem Aktivieren klären“ entschieden sind.
+> Nur der **Telegram-Eingang** des Orchestrators (`CEO_TELEGRAM_IN`) ist absichtlich deaktiviert, bis die Fragen unter
+> „Vor dem Aktivieren klären“ entschieden sind. Phase 1 (Briefing, Arbeitsspuren, Report) **sendet** nur an Telegram
+> und stört deshalb keinen anderen Bot-Empfänger. Sie kann sofort live gehen, siehe „Phase 1 in 10 Minuten live“.
 
 Früher waren es über 70 Workflows, viele davon doppelt, und die meisten liefen nicht. Jetzt sind es **8**:
 
@@ -137,6 +138,27 @@ die dasselbe tun wollen:
 3. **Jarvis:** Laut `JARVIS_LAB_STATE.json` gibt es schon einen Jarvis als Mentor in core-os (nur lesend, unter Quarantäne).
    `EMMA_JARVIS` hier ist ein reiner n8n-Berater ohne eigene Aktionen. Entscheiden, ob beide gewollt sind oder ob Emma den core-os-Jarvis fragen soll.
 
+## Phase 1 in 10 Minuten live
+
+Phase 1 braucht keine Entscheidung zum Telegram-Eingang, denn Emma **sendet** nur.
+
+1. **Datenbank:** `schema.sql` in der Postgres-DB ausführen, die n8n nutzt. Das Script ist idempotent.
+2. **Importieren:** `EMMA_COGNITIVE_LOOP.json`, `EMMA_DAILY_REPORT.json`, `EMMA_ENGINE_HUB.json`, `EMMA_JARVIS.json`.
+3. **Zugangsdaten** in diesen vier Workflows zuordnen: Gemini, Postgres, `telegram` (@WorldMaster_Bot, nur zum Senden),
+   Google Calendar, Google Drive. Im Report zusätzlich Header Auth (n8n-API-Key).
+4. **Sub-Workflows verknüpfen:** Im Cognitive Loop bei „Engine ausführen“ `EMMA_ENGINE_HUB` und bei „Jarvis fragen“
+   `EMMA_JARVIS` auswählen.
+5. **Testen:** Im Cognitive Loop auf **„Test workflow“** klicken (Knoten „Jetzt testen (Briefing)“). Erwartet:
+   - ein Google-Doc „Briefing JJJJ-MM-TT“ in `Emma/EMMA_ARBEITSSPUREN/01_Briefings`
+   - eine Morgennachricht von Emma in Telegram
+   - ein Termin „🧠 EMMA: …“ im Kalender „EMMA“
+   Danach im Daily Report ebenfalls „Test workflow“ klicken. Die Spuren erscheinen dort mit Link.
+6. **Aktivieren:** Cognitive Loop und Daily Report auf **Active** schalten. Ab dann gibt es täglich um 07:00 ein Briefing,
+   um 08:00 den Report und um 21:30 ein Arbeitsprotokoll.
+
+Solange der Telegram-Eingang aus ist, funktionieren `/ok`, `/nein`, `/erledigt` und `/agenda` noch nicht. Freigaben bleiben
+dann offen und stehen im Daily Report. Emma führt nichts Freigabepflichtiges aus, bevor du zustimmst.
+
 ## Einrichten
 
 1. `schema.sql` in Postgres ausführen. Das Script ist idempotent, bestehende Daten bleiben erhalten.
@@ -146,7 +168,7 @@ die dasselbe tun wollen:
    - Orchestrator: `EXECUTE_ENGINE` → `EMMA_ENGINE_HUB`, `EXECUTE_JARVIS` → `EMMA_JARVIS`
    - Cognitive Loop: `Engine ausführen` → `EMMA_ENGINE_HUB`, `Jarvis fragen` → `EMMA_JARVIS`
 4. Alte Workflows erst deaktivieren und nach ein paar Tagen löschen (siehe unten).
-5. Erst nach der Klärung oben: `CEO_TELEGRAM_IN` und „Herzschlag (15 min)“ aktivieren, dann die Workflows aktiv schalten.
+5. Erst nach der Klärung oben: `CEO_TELEGRAM_IN` aktivieren und den Orchestrator aktiv schalten.
    Engine Hub und Jarvis laufen als Sub-Workflows mit.
 
 ## Alte Workflows: was wo weiterlebt
