@@ -50,7 +50,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Einstellungen kommen aus Umgebungsvariablen des n8n-Containers – nie Werte ins Repo schreiben.\nconst env = k => { try { return $env[k]; } catch (e) { return undefined; } };\nconst cfg = {\n  core_os_url: String(env('EMMA_CORE_OS_URL') || '').replace(/\\/$/, ''),\n  budget_eur: Number(env('EMMA_BUDGET_EUR') || 5),\n  daily_docs: String(env('EMMA_DAILY_DOCS') || 'on') !== 'off',\n};\nif (!cfg.core_os_url) throw new Error('EMMA_CORE_OS_URL ist nicht gesetzt – ohne core-os arbeitet EMMA nicht.');\nreturn [{ json: cfg }];"
+        "jsCode": "// Einstellungen kommen aus Umgebungsvariablen des n8n-Containers – nie Werte ins Repo schreiben.\nconst env = k => { try { return $env[k]; } catch (e) { return undefined; } };\nconst cfg = {\n  core_os_url: String(env('EMMA_CORE_OS_URL') || '').replace(/\\/$/, ''),\n  budget_eur: Number(env('EMMA_BUDGET_EUR') || 5),\n  daily_docs: String(env('EMMA_DAILY_DOCS') || 'on') !== 'off',\n  n8n_url: String(env('EMMA_N8N_URL') || 'http://localhost:5678').replace(/\\/$/, ''), // interne n8n-API fuer freigegebene Workflows\n  calendar_id: String(env('EMMA_CALENDAR_ID') || ''),\n  drive_notes: String(env('EMMA_DRIVE_FOLDER_NOTES') || ''),\n  drive_drafts: String(env('EMMA_DRIVE_FOLDER_DRAFTS') || ''),\n};\nif (!cfg.core_os_url) throw new Error('EMMA_CORE_OS_URL ist nicht gesetzt – ohne core-os arbeitet EMMA nicht.');\nreturn [{ json: cfg }];"
       },
       "id": "ce926b1f-e3ae-5fb0-8e7a-cd90fa6bef92",
       "name": "Konfiguration",
@@ -86,7 +86,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// core-os ist die Wahrheit: nur was dort freigegeben ist, wird ausgeführt.\nconst body = $input.first().json;\nconst list = Array.isArray(body) ? body : (body.items || body.data || []);\nreturn [{ json: { ids: list.map(a => String(a.id)).filter(Boolean) } }];"
+        "jsCode": "// core-os ist die Wahrheit: nur was dort AUSDRUECKLICH freigegeben ist, wird ausgefuehrt (fail-closed).\n// Ignoriert core-os die Filter der Abfrage, zaehlt trotzdem nur, was selbst den Status \"approved\" traegt.\nconst body = $input.first().json;\nconst list = Array.isArray(body) ? body : (body.approvals || body.items || body.data);\nif (!Array.isArray(list)) throw new Error('Antwort von core-os auf die Freigabe-Abfrage ist keine Liste - nichts wird ausgefuehrt.');\nconst approved = a => a && /^(approved|freigegeben)$/i.test(String(a.decision_status ?? a.status ?? '')) && (a.source === undefined || a.source === 'n8n');\nreturn [{ json: { ids: list.filter(approved).map(a => String(a.id)).filter(Boolean) } }];"
       },
       "id": "0e2b6f8b-af03-5ec9-9aad-447f46ddfa90",
       "name": "Freigegebene IDs",
@@ -289,7 +289,7 @@
         "folderId": {
           "__rl": true,
           "mode": "id",
-          "value": "1MU8b_kJMzAmZf56e9skWDGyshmtwfChY"
+          "value": "={{ $('Konfiguration').first().json.drive_notes }}"
         },
         "options": {
           "convertToGoogleDocument": true
@@ -324,7 +324,7 @@
         "folderId": {
           "__rl": true,
           "mode": "id",
-          "value": "1m8YzBP6RYJ38SwkcsMYICisQraJ26-RU"
+          "value": "={{ $('Konfiguration').first().json.drive_drafts }}"
         },
         "options": {
           "convertToGoogleDocument": true
@@ -351,7 +351,7 @@
         "calendar": {
           "__rl": true,
           "mode": "id",
-          "value": "c_970237e7d365194456b77d0abe43bbe745d54d1a97b5a426d8e14b75c44a4124@group.calendar.google.com"
+          "value": "={{ $('Konfiguration').first().json.calendar_id }}"
         },
         "start": "={{ $json.payload.start }}",
         "end": "={{ $json.payload.end }}",
@@ -379,12 +379,12 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://localhost:5678/api/v1/workflows",
+        "url": "={{ $('Konfiguration').first().json.n8n_url + '/api/v1/workflows' }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ name: $json.payload.workflow_name, nodes: $json.payload.workflow_json.nodes, connections: $json.payload.workflow_json.connections, settings: { executionOrder: 'v1' } }) }}",
+        "jsonBody": "={{ JSON.stringify({ name: $json.workflow_name, nodes: $json.workflow_json.nodes, connections: $json.workflow_json.connections, settings: { executionOrder: 'v1' } }) }}",
         "options": {}
       },
       "id": "09225823-3b6a-5a3a-a7cf-25d5131bc5b6",
@@ -392,8 +392,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1320,
-        680
+        1760,
+        620
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -464,6 +464,64 @@
           "name": "core-os API"
         }
       }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Allowlist: kein Code, kein Execute Command, kein beliebiger HTTP-Request, keine Webhooks. (Dieselbe Pruefung laeuft vor dem Anlegen erneut im EMMA_APPROVED_EXECUTOR.)\nconst ALLOWED = new Set([\"n8n-nodes-base.manualTrigger\", \"n8n-nodes-base.scheduleTrigger\", \"n8n-nodes-base.executeWorkflowTrigger\", \"n8n-nodes-base.set\", \"n8n-nodes-base.if\", \"n8n-nodes-base.switch\", \"n8n-nodes-base.merge\", \"n8n-nodes-base.noOp\", \"n8n-nodes-base.filter\", \"n8n-nodes-base.sort\", \"n8n-nodes-base.limit\", \"n8n-nodes-base.dateTime\", \"n8n-nodes-base.googleSheets\", \"n8n-nodes-base.googleCalendar\", \"n8n-nodes-base.googleDrive\", \"@n8n/n8n-nodes-langchain.chainLlm\", \"@n8n/n8n-nodes-langchain.lmChatGoogleGemini\"]);\nconst MAX_NODES = 25, MAX_BYTES = 60000;\nconst FORBIDDEN = /\\$env|\\$vars|\\$secrets|\\$execution|process\\.|require\\s*\\(|import\\s*\\(|child_process|__proto__|constructor|eval\\s*\\(|Function\\s*\\(/i;\nconst checkWorkflow = wf => {\n  if (!wf || typeof wf !== 'object' || !Array.isArray(wf.nodes) || !wf.nodes.length) return { error: 'Workflow ohne Nodes' };\n  if (wf.nodes.length > MAX_NODES) return { error: `Zu viele Nodes (max. ${MAX_NODES})` };\n  if (JSON.stringify(wf).length > MAX_BYTES) return { error: 'Workflow zu gross' };\n  const names = new Set();\n  for (const n of wf.nodes) {\n    if (!n || typeof n.name !== 'string' || !n.name) return { error: 'Node ohne Namen' };\n    if (names.has(n.name)) return { error: `Doppelter Node-Name: ${n.name}` };\n    names.add(n.name);\n    if (!ALLOWED.has(n.type)) return { error: `Nicht erlaubter Node-Typ: ${n.name} (${n.type})` };\n    if (FORBIDDEN.test(JSON.stringify(n.parameters || {}))) return { error: `Node ${n.name}: Zugriff auf Umgebung oder Code nicht erlaubt` };\n  }\n  const connections = wf.connections && typeof wf.connections === 'object' ? wf.connections : {};\n  for (const [from, kinds] of Object.entries(connections)) {\n    for (const t of [from, ...Object.values(kinds).flat(2).map(c => c && c.node)]) if (t && !names.has(t)) return { error: `Verbindung auf unbekannten Node: ${t}` };\n  }\n  // Zugangsdaten und Webhook-IDs entfernen: der Nutzer verknuepft sie selbst, bevor er den Workflow aktiviert.\n  const nodes = wf.nodes.map(({ credentials, webhookId, ...rest }) => rest);\n  return { workflow: { nodes, connections } };\n};\n// Ausgefuehrt wird nur, was die Allowlist auch JETZT noch besteht - egal, was in der Warteschlange steht.\nreturn $input.all().map((i, idx) => {\n  const q = i.json;\n  const name = String((q.payload || {}).workflow_name || '');\n  const checked = /^EMMA_AUTO_[A-Z0-9_]{1,60}$/.test(name) ? checkWorkflow((q.payload || {}).workflow_json) : { error: 'Ungueltiger Workflow-Name' };\n  return { json: { ...q, valid: !checked.error, reject_reason: checked.error || '', workflow_name: name, workflow_json: checked.workflow || null }, pairedItem: { item: idx } };\n});"
+      },
+      "id": "67023622-b5d1-5879-b4b3-2443d44efd77",
+      "name": "Workflow prüfen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        680
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "a36ee9c8-76f8-5e83-acae-33249ea35213",
+              "leftValue": "={{ $json.valid === true }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a9a71d1a-05d2-5c6d-81e3-8cb231d450f3",
+      "name": "Workflow gültig?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        680
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map((i, idx) => ({ json: { error: { message: 'Workflow abgelehnt: ' + i.json.reject_reason } }, pairedItem: { item: idx } }));"
+      },
+      "id": "cfd04f00-5f32-587f-8f96-5a23c41728b0",
+      "name": "Workflow abgelehnt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        780
+      ]
     }
   ],
   "connections": {
@@ -576,7 +634,7 @@
         ],
         [
           {
-            "node": "Workflow anlegen (inaktiv)",
+            "node": "Workflow prüfen",
             "type": "main",
             "index": 0
           }
@@ -665,6 +723,46 @@
         [
           {
             "node": "Ergebnis an core-os",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Workflow prüfen": {
+      "main": [
+        [
+          {
+            "node": "Workflow gültig?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Workflow gültig?": {
+      "main": [
+        [
+          {
+            "node": "Workflow anlegen (inaktiv)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Workflow abgelehnt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Workflow abgelehnt": {
+      "main": [
+        [
+          {
+            "node": "Ergebnis sammeln",
             "type": "main",
             "index": 0
           }

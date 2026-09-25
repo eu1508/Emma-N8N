@@ -16,7 +16,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Einstellungen kommen aus Umgebungsvariablen des n8n-Containers – nie Werte ins Repo schreiben.\nconst env = k => { try { return $env[k]; } catch (e) { return undefined; } };\nconst cfg = {\n  core_os_url: String(env('EMMA_CORE_OS_URL') || '').replace(/\\/$/, ''),\n  budget_eur: Number(env('EMMA_BUDGET_EUR') || 5),\n  daily_docs: String(env('EMMA_DAILY_DOCS') || 'on') !== 'off',\n};\nif (!cfg.core_os_url) throw new Error('EMMA_CORE_OS_URL ist nicht gesetzt – ohne core-os arbeitet EMMA nicht.');\nreturn [{ json: cfg }];"
+        "jsCode": "// Einstellungen kommen aus Umgebungsvariablen des n8n-Containers – nie Werte ins Repo schreiben.\nconst env = k => { try { return $env[k]; } catch (e) { return undefined; } };\nconst qh = String(env('EMMA_QUIET_HOURS') || '22-7').split('-').map(Number); // Ruhezeit \"von-bis\" (volle Stunden, Europe/Berlin)\nconst [quietFrom, quietTo] = qh.length === 2 && qh.every(Number.isInteger) ? qh : [22, 7];\nconst cfg = {\n  core_os_url: String(env('EMMA_CORE_OS_URL') || '').replace(/\\/$/, ''),\n  budget_eur: Number(env('EMMA_BUDGET_EUR') || 5),\n  daily_docs: String(env('EMMA_DAILY_DOCS') || 'on') !== 'off',\n  approvals_per_day: Math.max(0, Number(env('EMMA_MAX_APPROVALS_PER_DAY') || 5)), // Obergrenze fuer Freigabe-Anfragen pro Tag\n  quiet_from: quietFrom,\n  quiet_to: quietTo,\n};\nif (!cfg.core_os_url) throw new Error('EMMA_CORE_OS_URL ist nicht gesetzt – ohne core-os arbeitet EMMA nicht.');\nreturn [{ json: cfg }];"
       },
       "id": "ce926b1f-e3ae-5fb0-8e7a-cd90fa6bef92",
       "name": "Konfiguration",
@@ -29,7 +29,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Nur bekannte Arten; alles andere wird verworfen. Ausgeführt wird erst nach Freigabe in core-os.\nconst KINDS = [\"run_engine\", \"write_note\", \"write_draft\", \"calendar_event\", \"create_workflow\"];\nreturn $('Vorschlag').all().map(i => i.json)\n  .filter(p => KINDS.includes(p.kind) && p.summary)\n  .map(p => ({ json: { kind: p.kind, summary: String(p.summary).slice(0, 300), payload: p.payload || {}, source: String(p.source || 'n8n') } }));"
+        "jsCode": "// Nur bekannte Arten mit gueltigem Inhalt. Ungueltiges wird NICHT still verworfen, sondern bricht laut ab (Fehler im Ausfuehrungsprotokoll).\n// Ohne Vorschlaege (leerer Aufruf, z. B. morgens) entsteht ein Flush-Signal: dann werden nur aufgeschobene Anfragen nachgeholt.\nconst KINDS = [\"run_engine\", \"write_note\", \"write_draft\", \"calendar_event\", \"create_workflow\"];\nconst ENGINES = [\"SUPERNOVA\", \"FINANCE\", \"LEGAL\", \"INTEL\", \"VENTURE\", \"LEAD\", \"SALES\", \"REACTIVATION\", \"PRICING\", \"CONTENT\", \"SOCIAL\", \"WORDPRESS\", \"SHOPIFY\", \"GITHUB\", \"TASKS\", \"GOOGLE_SUITE\", \"GUARDIAN\", \"EMAIL_VALIDATION\", \"CHART\", \"MEDIA\", \"EVOLUTION\", \"GENERAL\"];\nconst MAX_BYTES = 60000;\nconst iso = v => !isNaN(Date.parse(v));\nconst check = p => {\n  if (!p || !KINDS.includes(p.kind)) return 'unbekannte Art';\n  if (!p.summary) return 'Zusammenfassung fehlt';\n  const x = p.payload || {};\n  if (JSON.stringify(x).length > MAX_BYTES) return 'Inhalt zu gross';\n  switch (p.kind) {\n    case 'run_engine': return ENGINES.includes(String(x.engine || '').toUpperCase()) && x.text ? '' : 'Engine oder Text fehlt';\n    case 'write_note': case 'write_draft': return x.title && x.content ? '' : 'Titel oder Inhalt fehlt';\n    case 'calendar_event': return x.title && iso(x.start) && iso(x.end) ? '' : 'Titel oder Zeit fehlt';\n    case 'create_workflow': return /^EMMA_AUTO_[A-Z0-9_]{1,60}$/.test(String(x.workflow_name || '')) && x.workflow_json && Array.isArray(x.workflow_json.nodes) ? '' : 'Workflow-Name oder Nodes fehlen';\n  }\n  return 'unbekannte Art';\n};\nconst incoming = $('Vorschlag').all().map(i => i.json).filter(p => !(p && p._flush));\nif (!incoming.length) return [{ json: { kind: '_flush', summary: '', payload: {}, source: 'flush' } }];\nconst errors = incoming.map(p => ({ p, e: check(p) })).filter(x => x.e).map(x => `${x.p && x.p.kind || '?'}: ${x.e}`);\nif (errors.length) throw new Error('Vorschlag abgelehnt - ' + errors.slice(0, 3).join('; '));\nreturn incoming.map(p => ({ json: { kind: p.kind, summary: String(p.summary).slice(0, 300), payload: p.payload || {}, source: String(p.source || 'n8n') } }));"
       },
       "id": "a25c3ee8-2aee-5616-8c79-f3a813c21bca",
       "name": "Vorschläge prüfen",
@@ -43,7 +43,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO n8n_action_queue (kind, summary, payload, source) VALUES ($1, $2, $3::jsonb, $4) RETURNING id, kind, summary, source;",
+        "query": "INSERT INTO n8n_action_queue (kind, summary, payload, source)\nSELECT $1, $2, $3::jsonb, $4 WHERE $1 <> '_flush'\nRETURNING id, kind, summary, source;",
         "options": {
           "queryReplacement": "={{ [ $json.kind, $json.summary, JSON.stringify($json.payload), $json.source ] }}"
         }
@@ -61,7 +61,8 @@
           "id": "q2sycFRoxqP47oRY",
           "name": "Postgres account"
         }
-      }
+      },
+      "alwaysOutputData": true
     },
     {
       "parameters": {
@@ -79,7 +80,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        880,
+        1100,
         300
       ],
       "credentials": {
@@ -87,14 +88,15 @@
           "id": "CORE_OS_API",
           "name": "core-os API"
         }
-      }
+      },
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "UPDATE n8n_action_queue SET core_os_approval_id = $2 WHERE id = $1 RETURNING id AS queue_id, core_os_approval_id AS approval_id, kind, summary;",
+        "query": "WITH upd AS (\n  UPDATE n8n_action_queue\n  SET core_os_approval_id = NULLIF($2::text, ''),\n      approval_requested_at = CASE WHEN $2::text = '' THEN NULL ELSE approval_requested_at END\n  WHERE id = $1\n  RETURNING id AS queue_id, core_os_approval_id AS approval_id, kind, summary\n), log AS (\n  INSERT INTO emma_events (source, level, message)\n  SELECT 'EMMA_PROPOSE', 'ERROR', $3::text WHERE $2::text = ''\n)\nSELECT * FROM upd;",
         "options": {
-          "queryReplacement": "={{ [ $('In Warteschlange').item.json.id, String($json.id) ] }}"
+          "queryReplacement": "={{ [ $('Anfragen beanspruchen').item.json.id, $json.error ? '' : String($json.id ?? ''), $json.error ? String($json.error.message || $json.error).slice(0, 300) : '' ] }}"
         }
       },
       "id": "f9b864ff-607c-5549-abdf-3a7455a672d5",
@@ -102,7 +104,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        1100,
+        1320,
         300
       ],
       "credentials": {
@@ -111,6 +113,30 @@
           "name": "Postgres account"
         }
       }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH cfg AS (\n  SELECT $1::int AS cap, $2::int AS q_from, $3::int AS q_to,\n         extract(hour FROM (now() AT TIME ZONE 'Europe/Berlin'))::int AS h,\n         date_trunc('day', now() AT TIME ZONE 'Europe/Berlin') AT TIME ZONE 'Europe/Berlin' AS day_start\n), quiet AS (\n  SELECT CASE WHEN q_from = q_to THEN false\n              WHEN q_from < q_to THEN h >= q_from AND h < q_to\n              ELSE h >= q_from OR h < q_to END AS is_quiet\n  FROM cfg\n), sent AS (\n  SELECT count(*) AS n FROM n8n_action_queue WHERE approval_requested_at >= (SELECT day_start FROM cfg)\n), pick AS (\n  SELECT id FROM n8n_action_queue\n  WHERE status = 'proposed' AND core_os_approval_id IS NULL AND approval_requested_at IS NULL\n    AND NOT (SELECT is_quiet FROM quiet)\n  ORDER BY created_at, id\n  LIMIT GREATEST(0, (SELECT cap FROM cfg) - (SELECT n FROM sent))\n  FOR UPDATE SKIP LOCKED\n)\nUPDATE n8n_action_queue q SET approval_requested_at = now()\nFROM pick WHERE q.id = pick.id\nRETURNING q.id, q.kind, q.summary, q.source;",
+        "options": {
+          "queryReplacement": "={{ [ $('Konfiguration').first().json.approvals_per_day, $('Konfiguration').first().json.quiet_from, $('Konfiguration').first().json.quiet_to ] }}"
+        }
+      },
+      "id": "78bab0ee-791e-5861-bf7d-ad722f178cc4",
+      "name": "Anfragen beanspruchen",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        880,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "q2sycFRoxqP47oRY",
+          "name": "Postgres account"
+        }
+      },
+      "executeOnce": true
     }
   ],
   "connections": {
@@ -151,7 +177,7 @@
       "main": [
         [
           {
-            "node": "Freigabe in core-os anfragen",
+            "node": "Anfragen beanspruchen",
             "type": "main",
             "index": 0
           }
@@ -163,6 +189,17 @@
         [
           {
             "node": "Freigabe-ID speichern",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anfragen beanspruchen": {
+      "main": [
+        [
+          {
+            "node": "Freigabe in core-os anfragen",
             "type": "main",
             "index": 0
           }

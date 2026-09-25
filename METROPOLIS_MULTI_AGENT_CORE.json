@@ -40,7 +40,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const b = $('AGENT_IN').first().json.body || {};\nreturn [{ json: { text: String(b.text || b.message || '').slice(0, 4000) } }];"
+        "jsCode": "const dat = s => String(s == null ? '' : s).replace(/<\\s*\\/?\\s*daten\\s*>/gi, '[daten]'); // Text von Dritten darf den Daten-Block nicht schliessen\nconst b = $('AGENT_IN').first().json.body || {};\nreturn [{ json: { text: dat(String(b.text || b.message || '').slice(0, 4000)) } }];"
       },
       "id": "4a69b3a3-267f-5c05-b0a1-f9557cecbdcf",
       "name": "Prepare",

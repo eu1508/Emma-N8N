@@ -10,6 +10,11 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - run: python3 tools/validate_workflows.py
+      - run: python3 tools/test_validator.py
+      - run: node tools/test_code_nodes.js

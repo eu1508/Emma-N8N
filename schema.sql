@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS emma_cycles (
   created_at    timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE INDEX IF NOT EXISTS emma_cycles_mode_created_idx ON emma_cycles (mode, created_at);  -- Tageslimit fuer Weckzeiten
+
 -- Ergebnis jeder einzelnen Aktion – Fehler werden als Fehler geloggt, nicht als erledigt.
 CREATE TABLE IF NOT EXISTS emma_action_log (
   id           bigserial PRIMARY KEY,
@@ -54,12 +56,15 @@ CREATE TABLE IF NOT EXISTS n8n_action_queue (
   source               text,
   core_os_approval_id  text,
   status               text NOT NULL DEFAULT 'proposed',   -- proposed | running | done | failed
+  approval_requested_at timestamptz,   -- wann die Freigabe-Anfrage an core-os ging (zaehlt gegen die Tagesobergrenze); NULL = noch nicht angefragt
   result               text,
   created_at           timestamptz NOT NULL DEFAULT now(),
   started_at           timestamptz,
   finished_at          timestamptz
 );
+ALTER TABLE n8n_action_queue ADD COLUMN IF NOT EXISTS approval_requested_at timestamptz;
 CREATE INDEX IF NOT EXISTS n8n_action_queue_status_idx ON n8n_action_queue (status, core_os_approval_id);
+CREATE INDEX IF NOT EXISTS n8n_action_queue_requested_idx ON n8n_action_queue (approval_requested_at);
 
 -- Sichtbare Arbeitsspuren (Briefings, Protokolle, Notizen, Entwürfe, Kalendereinträge) mit Link.
 CREATE TABLE IF NOT EXISTS emma_artifacts (
