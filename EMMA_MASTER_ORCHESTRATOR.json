@@ -172,7 +172,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT\n  (SELECT COALESCE(json_agg(c ORDER BY c.created_at), '[]') FROM (\n     SELECT input, output, created_at FROM interaction_memory\n     WHERE user_id = $1 AND output IS NOT NULL ORDER BY created_at DESC LIMIT 6) c) AS recent_chat,\n  (SELECT COALESCE(json_agg(m), '[]') FROM (\n     SELECT category, content FROM emma_memory ORDER BY importance DESC, created_at DESC LIMIT 15) m) AS memory,\n  (SELECT COALESCE(json_agg(a), '[]') FROM (\n     SELECT id, topic, reason FROM emma_agenda WHERE status = 'open' ORDER BY created_at LIMIT 5) a) AS agenda,\n  (SELECT count(*) FROM emma_approvals WHERE status = 'pending') AS approvals_pending,\n  (SELECT count(*) FROM emma_tasks WHERE status = 'open') AS tasks_open;",
+        "query": "SELECT\n  (SELECT COALESCE(json_agg(c ORDER BY c.created_at), '[]') FROM (\n     SELECT input, output, created_at FROM interaction_memory\n     WHERE user_id = $1 AND output IS NOT NULL ORDER BY created_at DESC LIMIT 6) c) AS recent_chat,\n  (SELECT COALESCE(json_agg(m), '[]') FROM (\n     SELECT category, content FROM emma_memory ORDER BY importance DESC, created_at DESC LIMIT 15) m) AS memory,\n  (SELECT COALESCE(json_agg(a), '[]') FROM (\n     SELECT id, topic, reason FROM emma_agenda WHERE status = 'open' ORDER BY created_at LIMIT 5) a) AS agenda,\n  (SELECT count(*) FROM emma_approvals WHERE status = 'pending') AS approvals_pending,\n  (SELECT count(*) FROM emma_tasks WHERE status = 'open') AS tasks_open,\n  emma_budget_spent() AS spent_month;",
         "options": {
           "queryReplacement": "={{ [ $json.sender ] }}"
         }
@@ -195,7 +195,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const j = $('EXECUTION_POLICY').first().json;\nconst c = $input.first().json || {};\nconst list = v => (typeof v === 'string' ? JSON.parse(v) : v) || [];\nconst now = new Date().toLocaleString('de-DE', { timeZone: 'Europe/Berlin' });\nconst chat = list(c.recent_chat).map(m => `Irina: ${m.input}\\nEmma: ${m.output}`).join('\\n');\nconst memory = list(c.memory).map(m => `- [${m.category}] ${m.content}`).join('\\n');\nconst agenda = list(c.agenda).map(a => `- (#${a.id}) ${a.topic}${a.reason ? ' – ' + a.reason : ''}`).join('\\n');\n\nconst prompt = `Du bist EMMA – Irinas autonome KI-Partnerin (Worldmaster OS). Du hast ein Gedächtnis, eine eigene Agenda\nund arbeitest mit JARVIS zusammen (analytischer Berater, zweite Meinung).\nJETZT: ${now} (Europe/Berlin). KANAL: ${j.channel}. RECHTE: ${j.exec_mode}.\n\nDEIN GEDÄCHTNIS:\n${memory || '- (noch leer)'}\n\nLETZTES GESPRÄCH:\n${chat || '(neu)'}\n\nTHEMEN, DIE DU MIT IRINA BESPRECHEN WOLLTEST:\n${agenda || '- keine'}\nStatus: ${c.tasks_open || 0} offene Aufgaben, ${c.approvals_pending || 0} warten auf Freigabe (Befehl /agenda zeigt alles).\n\nNEUE NACHRICHT: ${j.text}\n\nRegeln:\n- Smalltalk/einfache Fragen: engine = \"NONE\", direkt, warm und kurz antworten.\n- Fachaufgabe: passende engine wählen. Zweite Meinung/kritische Prüfung/komplexe Planung: engine = \"JARVIS\".\n- Passt ein offenes Agenda-Thema, sprich es an und trage seine ID in discussed_agenda_ids ein, sobald es geklärt ist.\n- Merke dir Wichtiges über Irina, Ziele, Entscheidungen in \"remember\".\n- Termin gewünscht? Fülle calendar_event (ISO-Zeiten, Europe/Berlin), sonst null.\n\nAntworte NUR als JSON:\n{\n  \"engine\": \"SUPERNOVA|FINANCE|LEGAL|INTEL|VENTURE|LEAD|SALES|REACTIVATION|PRICING|CONTENT|SOCIAL|WORDPRESS|SHOPIFY|GITHUB|TASKS|GOOGLE_SUITE|GUARDIAN|EMAIL_VALIDATION|CHART|MEDIA|EVOLUTION|GENERAL|JARVIS|NONE\",\n  \"emma_reply\": \"Antwort an Irina\",\n  \"remember\": [{\"category\": \"goals|decisions|strategies|market_intel|learnings|people|preferences\", \"content\": \"...\", \"importance\": 1}],\n  \"discussed_agenda_ids\": [],\n  \"calendar_event\": {\"title\": \"...\", \"start\": \"2026-01-15T18:30:00+02:00\", \"end\": \"2026-01-15T19:30:00+02:00\", \"recurrence\": \"NONE|DAILY|WEEKLY|MONTHLY|YEARLY\"}\n}`;\nreturn [{ json: { ...j, prompt } }];"
+        "jsCode": "const j = $('EXECUTION_POLICY').first().json;\nconst c = $input.first().json || {};\nconst list = v => (typeof v === 'string' ? JSON.parse(v) : v) || [];\nconst now = new Date().toLocaleString('de-DE', { timeZone: 'Europe/Berlin' });\nconst chat = list(c.recent_chat).map(m => `Irina: ${m.input}\\nEmma: ${m.output}`).join('\\n');\nconst memory = list(c.memory).map(m => `- [${m.category}] ${m.content}`).join('\\n');\nconst agenda = list(c.agenda).map(a => `- (#${a.id}) ${a.topic}${a.reason ? ' – ' + a.reason : ''}`).join('\\n');\n\nconst prompt = `Du bist EMMA – Irinas autonome KI-Partnerin (Worldmaster OS). Du hast ein Gedächtnis, eine eigene Agenda\nund arbeitest mit JARVIS zusammen (analytischer Berater, zweite Meinung).\nJETZT: ${now} (Europe/Berlin). KANAL: ${j.channel}. RECHTE: ${j.exec_mode}.\n\nDEIN GEDÄCHTNIS:\n${memory || '- (noch leer)'}\n\nLETZTES GESPRÄCH:\n${chat || '(neu)'}\n\nTHEMEN, DIE DU MIT IRINA BESPRECHEN WOLLTEST:\n${agenda || '- keine'}\nStatus: ${c.tasks_open || 0} offene Aufgaben, ${c.approvals_pending || 0} warten auf Freigabe (Befehl /agenda zeigt alles).\n\nNEUE NACHRICHT: ${j.text}\n\nRegeln:\n- Smalltalk/einfache Fragen: engine = \"NONE\", direkt, warm und kurz antworten.\n- Fachaufgabe: passende engine wählen. Zweite Meinung/kritische Prüfung/komplexe Planung: engine = \"JARVIS\".\n- Passt ein offenes Agenda-Thema, sprich es an und trage seine ID in discussed_agenda_ids ein, sobald es geklärt ist.\n- Merke dir Wichtiges über Irina, Ziele, Entscheidungen in \"remember\".\n- Termin gewünscht? Fülle calendar_event (ISO-Zeiten, Europe/Berlin), sonst null.\n\nAntworte NUR als JSON:\n{\n  \"engine\": \"SUPERNOVA|FINANCE|LEGAL|INTEL|VENTURE|LEAD|SALES|REACTIVATION|PRICING|CONTENT|SOCIAL|WORDPRESS|SHOPIFY|GITHUB|TASKS|GOOGLE_SUITE|GUARDIAN|EMAIL_VALIDATION|CHART|MEDIA|EVOLUTION|GENERAL|JARVIS|NONE\",\n  \"emma_reply\": \"Antwort an Irina\",\n  \"remember\": [{\"category\": \"goals|decisions|strategies|market_intel|learnings|people|preferences\", \"content\": \"...\", \"importance\": 1}],\n  \"discussed_agenda_ids\": [],\n  \"calendar_event\": {\"title\": \"...\", \"start\": \"2026-01-15T18:30:00+02:00\", \"end\": \"2026-01-15T19:30:00+02:00\", \"recurrence\": \"NONE|DAILY|WEEKLY|MONTHLY|YEARLY\"}\n}`;\nreturn [{ json: { ...j, prompt, budget_ok: Number(c.spent_month || 0) < 5 } }];"
       },
       "id": "20b8882d-9023-5014-b55f-347bc180ea66",
       "name": "BUILD_MAYOR_PROMPT",
@@ -204,6 +204,51 @@
       "position": [
         1220,
         560
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "07d3323d-d6db-5932-97be-4104a8c3bdad",
+              "leftValue": "={{ $json.budget_ok }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5ac62560-c38e-59e7-a291-c215c5655014",
+      "name": "BUDGET_OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const j = $('EXECUTION_POLICY').first().json;\nconst reply = '⚠️ Mein KI-Budget für diesen Monat (5 €) ist aufgebraucht. /agenda, /ok, /nein und /erledigt funktionieren weiter.';\nreturn [{ json: { ...j, reply, emma_reply: reply, engine: 'NONE', engine_result: null } }];"
+      },
+      "id": "b7120f5b-8b4c-5f47-9f17-7ffdd8e0b352",
+      "name": "BUDGET_REPLY",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1460,
+        360
       ]
     },
     {
@@ -244,7 +289,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const ENGINES = [\"SUPERNOVA\", \"FINANCE\", \"LEGAL\", \"INTEL\", \"VENTURE\", \"LEAD\", \"SALES\", \"REACTIVATION\", \"PRICING\", \"CONTENT\", \"SOCIAL\", \"WORDPRESS\", \"SHOPIFY\", \"GITHUB\", \"TASKS\", \"GOOGLE_SUITE\", \"GUARDIAN\", \"EMAIL_VALIDATION\", \"CHART\", \"MEDIA\", \"EVOLUTION\", \"GENERAL\", \"JARVIS\"];\nconst response = $input.first().json.text || '';\nlet base = {};\nconst m = response.match(/\\{[\\s\\S]*\\}/);\nif (m) { try { base = JSON.parse(m[0]); } catch (e) {} }\nconst engine = String(base.engine || '').toUpperCase();\nconst ev = base.calendar_event;\nconst validEvent = ev && ev.title && !isNaN(Date.parse(ev.start));\nreturn [{ json: {\n  ...$('EXECUTION_POLICY').first().json,\n  engine: ENGINES.includes(engine) ? engine : 'NONE',\n  emma_reply: base.emma_reply || (m ? '' : response),\n  remember: (Array.isArray(base.remember) ? base.remember : []).filter(r => r && r.content).slice(0, 5),\n  discussed_agenda_ids: (Array.isArray(base.discussed_agenda_ids) ? base.discussed_agenda_ids : []).map(Number).filter(Boolean),\n  calendar_event: validEvent ? {\n    title: String(ev.title),\n    start: new Date(ev.start).toISOString(),\n    end: new Date(isNaN(Date.parse(ev.end)) ? Date.parse(ev.start) + 3600000 : ev.end).toISOString(),\n    rrule: ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'].includes(String(ev.recurrence).toUpperCase()) ? `FREQ=${String(ev.recurrence).toUpperCase()}` : '',\n  } : null,\n} }];"
+        "jsCode": "const ENGINES = [\"SUPERNOVA\", \"FINANCE\", \"LEGAL\", \"INTEL\", \"VENTURE\", \"LEAD\", \"SALES\", \"REACTIVATION\", \"PRICING\", \"CONTENT\", \"SOCIAL\", \"WORDPRESS\", \"SHOPIFY\", \"GITHUB\", \"TASKS\", \"GOOGLE_SUITE\", \"GUARDIAN\", \"EMAIL_VALIDATION\", \"CHART\", \"MEDIA\", \"EVOLUTION\", \"GENERAL\", \"JARVIS\"];\nconst response = $input.first().json.text || '';\nlet base = {};\nconst m = response.match(/\\{[\\s\\S]*\\}/);\nif (m) { try { base = JSON.parse(m[0]); } catch (e) {} }\nconst engine = String(base.engine || '').toUpperCase();\nconst ev = base.calendar_event;\nconst validEvent = ev && ev.title && !isNaN(Date.parse(ev.start));\nreturn [{ json: {\n  ...$('EXECUTION_POLICY').first().json,\n  engine: ENGINES.includes(engine) ? engine : 'NONE',\n  emma_reply: base.emma_reply || (m ? '' : response),\n  prompt_chars: $('BUILD_MAYOR_PROMPT').first().json.prompt.length,\n  output_chars: response.length,\n  remember: (Array.isArray(base.remember) ? base.remember : []).filter(r => r && r.content).slice(0, 5),\n  discussed_agenda_ids: (Array.isArray(base.discussed_agenda_ids) ? base.discussed_agenda_ids : []).map(Number).filter(Boolean),\n  calendar_event: validEvent ? {\n    title: String(ev.title),\n    start: new Date(ev.start).toISOString(),\n    end: new Date(isNaN(Date.parse(ev.end)) ? Date.parse(ev.start) + 3600000 : ev.end).toISOString(),\n    rrule: ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'].includes(String(ev.recurrence).toUpperCase()) ? `FREQ=${String(ev.recurrence).toUpperCase()}` : '',\n  } : null,\n} }];"
       },
       "id": "55275157-9802-5409-bbcb-12198e05e417",
       "name": "PARSE_MAYOR_JSON",
@@ -442,9 +487,9 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "WITH chat AS (\n  INSERT INTO interaction_memory (session_id, user_id, channel, input, output) VALUES ($1, $2, $3, $4, $5)\n), mem AS (\n  INSERT INTO emma_memory (category, content, importance, source)\n  SELECT COALESCE(r->>'category', 'learnings'), r->>'content',\n         LEAST(5, GREATEST(1, COALESCE(NULLIF(regexp_replace(COALESCE(r->>'importance', ''), '[^0-9]', '', 'g'), '')::int, 3))), 'CHAT'\n  FROM jsonb_array_elements($6::jsonb) AS r\n), agenda AS (\n  UPDATE emma_agenda SET status = 'done', done_at = now()\n  WHERE id IN (SELECT (x)::bigint FROM jsonb_array_elements_text($7::jsonb) AS x) AND status = 'open'\n)\nSELECT 1 AS saved;",
+        "query": "WITH chat AS (\n  INSERT INTO interaction_memory (session_id, user_id, channel, input, output) VALUES ($1, $2, $3, $4, $5)\n), mem AS (\n  INSERT INTO emma_memory (category, content, importance, source)\n  SELECT COALESCE(r->>'category', 'learnings'), r->>'content',\n         LEAST(5, GREATEST(1, COALESCE(NULLIF(regexp_replace(COALESCE(r->>'importance', ''), '[^0-9]', '', 'g'), '')::int, 3))), 'CHAT'\n  FROM jsonb_array_elements($6::jsonb) AS r\n), agenda AS (\n  UPDATE emma_agenda SET status = 'done', done_at = now()\n  WHERE id IN (SELECT (x)::bigint FROM jsonb_array_elements_text($7::jsonb) AS x) AND status = 'open'\n), usage AS (\n  INSERT INTO llm_usage (workflow, input_chars, output_chars, est_cost_eur)\n  VALUES ('ORCHESTRATOR', $8, $9, emma_llm_cost($8, $9))\n)\nSELECT 1 AS saved;",
         "options": {
-          "queryReplacement": "={{ [ $json.session_id, $json.sender, $json.channel, $json.text, $json.reply, JSON.stringify($json.remember || []), JSON.stringify($json.discussed_agenda_ids || []) ] }}"
+          "queryReplacement": "={{ [ $json.session_id, $json.sender, $json.channel, $json.text, $json.reply, JSON.stringify($json.remember || []), JSON.stringify($json.discussed_agenda_ids || []), $json.prompt_chars || 0, $json.output_chars || 0 ] }}"
         }
       },
       "id": "25cde55b-cc27-559d-998b-70be89c28186",
@@ -647,7 +692,36 @@
       "main": [
         [
           {
+            "node": "BUDGET_OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BUDGET_OK?": {
+      "main": [
+        [
+          {
             "node": "THE_MAYOR_BRAIN",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "BUDGET_REPLY",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BUDGET_REPLY": {
+      "main": [
+        [
+          {
+            "node": "IS_TELEGRAM?",
             "type": "main",
             "index": 0
           }

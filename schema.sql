@@ -142,3 +142,40 @@ CREATE TABLE IF NOT EXISTS agent_dialogue (
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS agent_dialogue_created_idx ON agent_dialogue (created_at);
+
+-- ---------------------------------------------------------------- Budget (Phase 1: 0 €, hartes Limit 5 €)
+-- Jeder KI-Aufruf wird mit geschätzten Kosten protokolliert. Im Free Tier kostet es real 0 €;
+-- die Schätzung schützt davor, dass bei aktivierter Abrechnung unbemerkt Kosten entstehen.
+CREATE TABLE IF NOT EXISTS llm_usage (
+  id             bigserial PRIMARY KEY,
+  workflow       text,
+  input_chars    int,
+  output_chars   int,
+  est_cost_eur   numeric(12, 6) NOT NULL DEFAULT 0,
+  created_at     timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS llm_usage_created_idx ON llm_usage (created_at);
+
+-- Listenpreis Gemini 2.5 Flash bei Abrechnung, konservativ 1 $ = 1 €: 0,30 € je 1 Mio. Input-Token,
+-- 2,50 € je 1 Mio. Output-Token, ~4 Zeichen je Token. Preise hier anpassen, falls Google sie ändert.
+CREATE OR REPLACE FUNCTION emma_llm_cost(in_chars int, out_chars int) RETURNS numeric
+LANGUAGE sql IMMUTABLE AS $$
+  SELECT round((COALESCE(in_chars, 0) / 4.0 * 0.30 + COALESCE(out_chars, 0) / 4.0 * 2.50) / 1000000, 6)
+$$;
+
+-- Geschätzte Kosten im laufenden Monat. Alle Workflows prüfen vor jedem KI-Aufruf gegen das Limit (5 €).
+CREATE OR REPLACE FUNCTION emma_budget_spent() RETURNS numeric
+LANGUAGE sql STABLE AS $$
+  SELECT COALESCE(sum(est_cost_eur), 0) FROM llm_usage WHERE created_at >= date_trunc('month', now())
+$$;
+
+-- ---------------------------------------------------------------- Sichtbare Arbeitsspuren
+-- Alles, was Emma sichtbar hinterlässt: Briefings, Protokolle, Notizen, Entwürfe, Kalendereinträge.
+CREATE TABLE IF NOT EXISTS emma_artifacts (
+  id          bigserial PRIMARY KEY,
+  kind        text NOT NULL,     -- briefing | protokoll | wissen | entwurf | kalender
+  title       text,
+  url         text,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS emma_artifacts_created_idx ON emma_artifacts (created_at);

@@ -131,15 +131,81 @@
     },
     {
       "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT emma_budget_spent() AS spent_month;",
+        "options": {}
+      },
+      "id": "b1870138-a1a8-51e9-8067-200e5696dd0c",
+      "name": "Budget prüfen",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        420,
+        500
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "q2sycFRoxqP47oRY",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "978e497b-c955-59e9-a654-3503ecc23a88",
+              "leftValue": "={{ Number($json.spent_month) < 5 }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "8d8ed402-51c4-5fa0-970b-9b64a9d920a1",
+      "name": "Budget ok?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        540,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $('Build Prompt').first().json;\nreturn [{ json: { engine: r.engine, status: 'budget_exceeded', risk_level: 'LOW', result: {},\n  summary: 'Monatsbudget (5 €) erreicht – keine KI-Anfrage gestellt.',\n  tasks_created: 0, leads_created: 0, needs_approval: false, via_webhook: r.via_webhook } }];"
+      },
+      "id": "04f75a10-fbd0-59c1-9438-57e46fdabe1c",
+      "name": "Budget erschöpft",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        820,
+        700
+      ]
+    },
+    {
+      "parameters": {
         "promptType": "define",
-        "text": "={{ $json.prompt }}"
+        "text": "={{ $('Build Prompt').first().json.prompt }}"
       },
       "id": "56ac57d1-f029-533c-8609-fe8a57ef9968",
       "name": "Engine LLM",
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "typeVersion": 1.4,
       "position": [
-        560,
+        660,
         500
       ]
     },
@@ -167,7 +233,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const req = $('Build Prompt').first().json;\nconst raw = $input.first().json.text || '';\nlet out = {}, status = 'ok';\ntry {\n  const m = raw.match(/\\{[\\s\\S]*\\}/);\n  out = m ? JSON.parse(m[0]) : {};\n  if (!m) status = 'no_json';\n} catch (e) { status = 'parse_error'; out = { raw }; }\n\nconst risk = String(out.risk_level || '').toUpperCase();\nconst risk_level = ['LOW', 'MEDIUM', 'HIGH'].includes(risk) ? risk : 'LOW';\nconst tasks = (Array.isArray(out.tasks) ? out.tasks : []).map(t => typeof t === 'string' ? t : (t?.title || JSON.stringify(t))).filter(Boolean).slice(0, 10);\nconst contacts = req.engine === 'LEAD' && Array.isArray(out.contacts) ? out.contacts.filter(c => c && (c.email || c.name)) : [];\n\nreturn [{ json: {\n  ...req, prompt: undefined, status, risk_level, tasks, contacts,\n  summary: out.summary || out.message_to_irina || out.answer || '',\n  result: out,\n} }];"
+        "jsCode": "const req = $('Build Prompt').first().json;\nconst raw = $input.first().json.text || '';\nlet out = {}, status = 'ok';\ntry {\n  const m = raw.match(/\\{[\\s\\S]*\\}/);\n  out = m ? JSON.parse(m[0]) : {};\n  if (!m) status = 'no_json';\n} catch (e) { status = 'parse_error'; out = { raw }; }\n\nconst risk = String(out.risk_level || '').toUpperCase();\nconst risk_level = ['LOW', 'MEDIUM', 'HIGH'].includes(risk) ? risk : 'LOW';\nconst tasks = (Array.isArray(out.tasks) ? out.tasks : []).map(t => typeof t === 'string' ? t : (t?.title || JSON.stringify(t))).filter(Boolean).slice(0, 10);\nconst contacts = req.engine === 'LEAD' && Array.isArray(out.contacts) ? out.contacts.filter(c => c && (c.email || c.name)) : [];\n\nreturn [{ json: {\n  ...req, prompt: undefined, prompt_chars: String(req.prompt || '').length, output_chars: raw.length,\n  status, risk_level, tasks, contacts,\n  summary: out.summary || out.message_to_irina || out.answer || '',\n  result: out,\n} }];"
       },
       "id": "4290bd0c-a842-51e7-b6a9-81b6e8554b84",
       "name": "Parse Result",
@@ -181,9 +247,9 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "WITH run AS (\n  INSERT INTO engine_runs (engine, session_id, sender, input, output, risk_level, status)\n  VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)\n  RETURNING id\n), new_tasks AS (\n  INSERT INTO emma_tasks (title, source_engine, run_id)\n  SELECT t, $1, (SELECT id FROM run) FROM jsonb_array_elements_text($8::jsonb) AS t\n  RETURNING 1\n), new_leads AS (\n  INSERT INTO crm_leads (name, email, phone, company, status, interest_score, context)\n  SELECT c->>'name', c->>'email', c->>'phone', c->>'company', 'new',\n         NULLIF(regexp_replace(COALESCE(c->>'score', ''), '[^0-9]', '', 'g'), '')::int, $9\n  FROM jsonb_array_elements($10::jsonb) AS c\n  RETURNING 1\n), approval AS (\n  INSERT INTO emma_approvals (run_id, engine, reason)\n  SELECT (SELECT id FROM run), $1, $9 WHERE $6 = 'HIGH'\n  RETURNING 1\n)\nSELECT (SELECT id FROM run) AS run_id,\n       (SELECT count(*) FROM new_tasks) AS tasks_created,\n       (SELECT count(*) FROM new_leads) AS leads_created,\n       (SELECT count(*) FROM approval) AS approvals_created;",
+        "query": "WITH run AS (\n  INSERT INTO engine_runs (engine, session_id, sender, input, output, risk_level, status)\n  VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)\n  RETURNING id\n), new_tasks AS (\n  INSERT INTO emma_tasks (title, source_engine, run_id)\n  SELECT t, $1, (SELECT id FROM run) FROM jsonb_array_elements_text($8::jsonb) AS t\n  RETURNING 1\n), new_leads AS (\n  INSERT INTO crm_leads (name, email, phone, company, status, interest_score, context)\n  SELECT c->>'name', c->>'email', c->>'phone', c->>'company', 'new',\n         NULLIF(regexp_replace(COALESCE(c->>'score', ''), '[^0-9]', '', 'g'), '')::int, $9\n  FROM jsonb_array_elements($10::jsonb) AS c\n  RETURNING 1\n), approval AS (\n  INSERT INTO emma_approvals (run_id, engine, reason)\n  SELECT (SELECT id FROM run), $1, $9 WHERE $6 = 'HIGH'\n  RETURNING 1\n), usage AS (\n  INSERT INTO llm_usage (workflow, input_chars, output_chars, est_cost_eur)\n  VALUES ('ENGINE_HUB:' || $1, $11, $12, emma_llm_cost($11, $12))\n)\nSELECT (SELECT id FROM run) AS run_id,\n       (SELECT count(*) FROM new_tasks) AS tasks_created,\n       (SELECT count(*) FROM new_leads) AS leads_created,\n       (SELECT count(*) FROM approval) AS approvals_created;",
         "options": {
-          "queryReplacement": "={{ [ $json.engine, $json.session_id, $json.sender, $json.text, JSON.stringify($json.result), $json.risk_level, $json.status, JSON.stringify($json.tasks), $json.summary || $json.text.slice(0, 200), JSON.stringify($json.contacts) ] }}"
+          "queryReplacement": "={{ [ $json.engine, $json.session_id, $json.sender, $json.text, JSON.stringify($json.result), $json.risk_level, $json.status, JSON.stringify($json.tasks), $json.summary || $json.text.slice(0, 200), JSON.stringify($json.contacts), $json.prompt_chars, $json.output_chars ] }}"
         }
       },
       "id": "7b152aba-3ef8-5e86-b087-66ab7e782fef",
@@ -357,7 +423,47 @@
       "main": [
         [
           {
+            "node": "Budget prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Budget prüfen": {
+      "main": [
+        [
+          {
+            "node": "Budget ok?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Budget ok?": {
+      "main": [
+        [
+          {
             "node": "Engine LLM",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Budget erschöpft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Budget erschöpft": {
+      "main": [
+        [
+          {
+            "node": "Via Webhook?",
             "type": "main",
             "index": 0
           }

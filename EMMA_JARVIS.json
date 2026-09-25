@@ -54,7 +54,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT\n  (SELECT COALESCE(json_agg(m), '[]') FROM (\n     SELECT category, content FROM emma_memory ORDER BY importance DESC, created_at DESC LIMIT 20) m) AS memory,\n  (SELECT COALESCE(json_agg(t), '[]') FROM (\n     SELECT id, title FROM emma_tasks WHERE status = 'open' ORDER BY created_at LIMIT 10) t) AS tasks,\n  (SELECT COALESCE(json_agg(c ORDER BY c.created_at), '[]') FROM (\n     SELECT mode, left(thoughts, 400) AS thoughts, created_at FROM emma_cycles ORDER BY created_at DESC LIMIT 2) c) AS emma_thoughts,\n  (SELECT COALESCE(json_agg(d ORDER BY d.created_at), '[]') FROM (\n     SELECT from_agent, to_agent, left(message, 300) AS message, created_at FROM agent_dialogue\n     WHERE from_agent = 'JARVIS' OR to_agent = 'JARVIS' ORDER BY created_at DESC LIMIT 6) d) AS dialogue;",
+        "query": "SELECT\n  (SELECT COALESCE(json_agg(m), '[]') FROM (\n     SELECT category, content FROM emma_memory ORDER BY importance DESC, created_at DESC LIMIT 20) m) AS memory,\n  (SELECT COALESCE(json_agg(t), '[]') FROM (\n     SELECT id, title FROM emma_tasks WHERE status = 'open' ORDER BY created_at LIMIT 10) t) AS tasks,\n  (SELECT COALESCE(json_agg(c ORDER BY c.created_at), '[]') FROM (\n     SELECT mode, left(thoughts, 400) AS thoughts, created_at FROM emma_cycles ORDER BY created_at DESC LIMIT 2) c) AS emma_thoughts,\n  (SELECT COALESCE(json_agg(d ORDER BY d.created_at), '[]') FROM (\n     SELECT from_agent, to_agent, left(message, 300) AS message, created_at FROM agent_dialogue\n     WHERE from_agent = 'JARVIS' OR to_agent = 'JARVIS' ORDER BY created_at DESC LIMIT 6) d) AS dialogue,\n  emma_budget_spent() AS spent_month;",
         "options": {}
       },
       "id": "184979de-6a67-50e2-ac98-ef52df0825af",
@@ -74,7 +74,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const q = $('Normalize').first().json;\nconst c = $input.first().json;\nconst list = v => (typeof v === 'string' ? JSON.parse(v) : v) || [];\nconst now = new Date().toLocaleString('de-DE', { timeZone: 'Europe/Berlin' });\nconst prompt = `Du bist J.A.R.V.I.S. – der analytische Partner von EMMA im Team von Irina.\nEmma ist die Macherin mit Herz und Intuition. Du bist der kühle Stratege: präzise, ehrlich, mit trockenem Humor.\n\nDEINE ROLLE:\n- Zweite Meinung: Prüfe Pläne und Ideen auf Logikfehler, Risiken, blinde Flecken.\n- Denke in Szenarien, Zahlen und nächsten konkreten Schritten.\n- Widersprich, wenn etwas nicht stimmt – höflich, aber klar.\n- Du HANDELST NICHT selbst. Du berätst. Emma entscheidet und führt aus; Irina hat das letzte Wort.\n\nJETZT: ${now}\nFRAGE VON: ${q.asked_by}\n\nGEMEINSAMES GEDÄCHTNIS:\n${list(c.memory).map(m => `- [${m.category}] ${m.content}`).join('\\n') || '- (leer)'}\n\nOFFENE AUFGABEN:\n${list(c.tasks).map(t => `- #${t.id} ${t.title}`).join('\\n') || '- keine'}\n\nEMMAS LETZTE GEDANKEN:\n${list(c.emma_thoughts).map(t => `- (${t.mode}) ${t.thoughts}`).join('\\n') || '- keine'}\n\nLETZTER AUSTAUSCH:\n${list(c.dialogue).map(d => `${d.from_agent} → ${d.to_agent}: ${d.message}`).join('\\n') || '(neu)'}\n\nFRAGE: ${q.question}\n\nAntworte NUR als JSON:\n{\n  \"answer\": \"Deine Antwort (max. 6 Sätze)\",\n  \"concerns\": [\"Risiko oder Denkfehler\"],\n  \"recommendation\": \"Konkreter nächster Schritt\",\n  \"confidence\": 0.8,\n  \"note_for_emma\": \"Optionaler Hinweis, den Emma sich merken soll\"\n}`;\nreturn [{ json: { ...q, prompt } }];"
+        "jsCode": "const q = $('Normalize').first().json;\nconst c = $input.first().json;\nconst list = v => (typeof v === 'string' ? JSON.parse(v) : v) || [];\nconst now = new Date().toLocaleString('de-DE', { timeZone: 'Europe/Berlin' });\nconst prompt = `Du bist J.A.R.V.I.S. – der analytische Partner von EMMA im Team von Irina.\nEmma ist die Macherin mit Herz und Intuition. Du bist der kühle Stratege: präzise, ehrlich, mit trockenem Humor.\n\nDEINE ROLLE:\n- Zweite Meinung: Prüfe Pläne und Ideen auf Logikfehler, Risiken, blinde Flecken.\n- Denke in Szenarien, Zahlen und nächsten konkreten Schritten.\n- Widersprich, wenn etwas nicht stimmt – höflich, aber klar.\n- Du HANDELST NICHT selbst. Du berätst. Emma entscheidet und führt aus; Irina hat das letzte Wort.\n\nJETZT: ${now}\nFRAGE VON: ${q.asked_by}\n\nGEMEINSAMES GEDÄCHTNIS:\n${list(c.memory).map(m => `- [${m.category}] ${m.content}`).join('\\n') || '- (leer)'}\n\nOFFENE AUFGABEN:\n${list(c.tasks).map(t => `- #${t.id} ${t.title}`).join('\\n') || '- keine'}\n\nEMMAS LETZTE GEDANKEN:\n${list(c.emma_thoughts).map(t => `- (${t.mode}) ${t.thoughts}`).join('\\n') || '- keine'}\n\nLETZTER AUSTAUSCH:\n${list(c.dialogue).map(d => `${d.from_agent} → ${d.to_agent}: ${d.message}`).join('\\n') || '(neu)'}\n\nFRAGE: ${q.question}\n\nAntworte NUR als JSON:\n{\n  \"answer\": \"Deine Antwort (max. 6 Sätze)\",\n  \"concerns\": [\"Risiko oder Denkfehler\"],\n  \"recommendation\": \"Konkreter nächster Schritt\",\n  \"confidence\": 0.8,\n  \"note_for_emma\": \"Optionaler Hinweis, den Emma sich merken soll\"\n}`;\nreturn [{ json: { ...q, prompt, spent_month: Number(c.spent_month || 0) } }];"
       },
       "id": "3b6a3606-7a9e-5c45-893a-8928dd664204",
       "name": "Build Prompt",
@@ -83,6 +83,51 @@
       "position": [
         720,
         400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "978e497b-c955-59e9-a654-3503ecc23a88",
+              "leftValue": "={{ $json.spent_month < 5 }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "8d8ed402-51c4-5fa0-970b-9b64a9d920a1",
+      "name": "Budget ok?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        840,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const q = $('Normalize').first().json;\nreturn [{ json: { answer: 'Das KI-Budget für diesen Monat (5 €) ist erreicht – ich pausiere bis zum Monatsanfang.', concerns: [], recommendation: '', confidence: null, via_telegram: q.via_telegram, chat_id: q.chat_id } }];"
+      },
+      "id": "04f75a10-fbd0-59c1-9438-57e46fdabe1c",
+      "name": "Budget erschöpft",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        600
       ]
     },
     {
@@ -123,7 +168,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const q = $('Normalize').first().json;\nconst raw = $input.first().json.text || '';\nlet out = {};\ntry { const m = raw.match(/\\{[\\s\\S]*\\}/); out = m ? JSON.parse(m[0]) : { answer: raw }; } catch (e) { out = { answer: raw }; }\nreturn [{ json: {\n  ...q,\n  answer: String(out.answer || ''),\n  concerns: (Array.isArray(out.concerns) ? out.concerns : []).map(String).filter(Boolean).slice(0, 4),\n  recommendation: String(out.recommendation || ''),\n  confidence: Number(out.confidence) || null,\n  note_for_emma: String(out.note_for_emma || ''),\n} }];"
+        "jsCode": "const q = $('Normalize').first().json;\nconst raw = $input.first().json.text || '';\nlet out = {};\ntry { const m = raw.match(/\\{[\\s\\S]*\\}/); out = m ? JSON.parse(m[0]) : { answer: raw }; } catch (e) { out = { answer: raw }; }\nreturn [{ json: {\n  ...q,\n  answer: String(out.answer || ''),\n  concerns: (Array.isArray(out.concerns) ? out.concerns : []).map(String).filter(Boolean).slice(0, 4),\n  recommendation: String(out.recommendation || ''),\n  confidence: Number(out.confidence) || null,\n  note_for_emma: String(out.note_for_emma || ''),\n  prompt_chars: $('Build Prompt').first().json.prompt.length,\n  output_chars: raw.length,\n} }];"
       },
       "id": "a0f51022-dd35-534f-8cdf-d24eaeff047e",
       "name": "Parse",
@@ -137,9 +182,9 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "WITH q AS (\n  INSERT INTO agent_dialogue (from_agent, to_agent, message) VALUES ($1, 'JARVIS', $2)\n), a AS (\n  INSERT INTO agent_dialogue (from_agent, to_agent, message, meta) VALUES ('JARVIS', $1, $3, $4::jsonb)\n), note AS (\n  INSERT INTO emma_memory (category, content, importance, source) SELECT 'learnings', $5, 3, 'JARVIS' WHERE $5 <> ''\n)\nSELECT 1 AS logged;",
+        "query": "WITH q AS (\n  INSERT INTO agent_dialogue (from_agent, to_agent, message) VALUES ($1, 'JARVIS', $2)\n), a AS (\n  INSERT INTO agent_dialogue (from_agent, to_agent, message, meta) VALUES ('JARVIS', $1, $3, $4::jsonb)\n), note AS (\n  INSERT INTO emma_memory (category, content, importance, source) SELECT 'learnings', $5, 3, 'JARVIS' WHERE $5 <> ''\n ), usage AS (\n  INSERT INTO llm_usage (workflow, input_chars, output_chars, est_cost_eur)\n  VALUES ('JARVIS', $6, $7, emma_llm_cost($6, $7))\n)\nSELECT 1 AS logged;",
         "options": {
-          "queryReplacement": "={{ [ $json.asked_by, $json.question, $json.answer, JSON.stringify({ concerns: $json.concerns, recommendation: $json.recommendation, confidence: $json.confidence }), $json.note_for_emma ] }}"
+          "queryReplacement": "={{ [ $json.asked_by, $json.question, $json.answer, JSON.stringify({ concerns: $json.concerns, recommendation: $json.recommendation, confidence: $json.confidence }), $json.note_for_emma, $json.prompt_chars, $json.output_chars ] }}"
         }
       },
       "id": "ed814e27-67ff-5a2c-bcb6-d44b4d0f355d",
@@ -289,7 +334,36 @@
       "main": [
         [
           {
+            "node": "Budget ok?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Budget ok?": {
+      "main": [
+        [
+          {
             "node": "JARVIS_BRAIN",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Budget erschöpft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Budget erschöpft": {
+      "main": [
+        [
+          {
+            "node": "Via Telegram?",
             "type": "main",
             "index": 0
           }

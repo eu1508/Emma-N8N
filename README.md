@@ -18,6 +18,39 @@ Früher waren es über 70 Workflows, viele davon doppelt, und die meisten liefen
 | `METROPOLIS_MULTI_AGENT_CORE` | Strategie-, Risiko- und Opportunity-Agent parallel |
 | `EMMA_SELF_BUILDER` | Baut neue Workflows mit Duplikat-Schutz und legt sie inaktiv an |
 
+## Phase 1 – Entscheidungen
+
+| Frage | Entscheidung | Umsetzung |
+|---|---|---|
+| Wo läuft es? | Synology mit Docker, PC als Reserve | n8n läuft bereits im Docker auf der Synology-VM. Alles hier sind n8n-Workflows, der PC wird nicht gebraucht. |
+| Postfach | eigene Jarvis-Adresse, später | **Phase 2** (IMAP). In Phase 1 gibt es keine Mail-Anbindung. |
+| Kanäle | Telegram zuerst | Nur Telegram aktiv. Vorschläge für später siehe unten. |
+| Budget | 0 € jetzt, Verlustgrenze 5 € | Nur das Free-Tier-Modell **Gemini 2.5 Flash**. Jeder KI-Aufruf wird protokolliert. Ab **5 €** geschätzten Monatskosten macht Emma keine KI-Aufrufe mehr. |
+| Autonomie | wie vorgeschlagen | Leitplanken bleiben: 6 Aktionen pro Zyklus, 3 Nachrichten pro Tag, Nachtruhe, riskante Aktionen nur mit Freigabe. |
+| Erstes Ziel | Briefing und sichtbare Arbeitsspuren | Morgens ein Briefing-Dokument, abends ein Arbeitsprotokoll, Notizen, Entwürfe und Kalendereinträge. Alles steht im Daily Report mit Link. |
+| Steuerberater | später | – |
+| Schmerzpunkt | sehen, dass gearbeitet wird | Jede Spur landet in `emma_artifacts` und in Google Drive unter **Emma → EMMA_ARBEITSSPUREN**. |
+
+### Wo die Arbeitsspuren landen (Google Drive → Emma → EMMA_ARBEITSSPUREN)
+
+| Ordner | Inhalt | Wann |
+|---|---|---|
+| `01_Briefings` | „Briefing JJJJ-MM-TT“: Gedanken, Termine, Plan, offene Aufgaben, Themen | täglich 07:00 |
+| `02_Wissen` | „Wissen – …“: Recherchen und Erkenntnisse (`write_note`) | wenn Emma etwas herausfindet |
+| `03_Entwuerfe` | „Entwurf – …“: Texte, Posts, Angebote (`write_draft`), werden **nicht** verschickt | bei Bedarf |
+| `04_Arbeitsprotokoll` | „Arbeitsprotokoll JJJJ-MM-TT“: jeder Denkzyklus mit Aktionen, erstellte Spuren, erledigte Aufgaben | täglich 21:30 |
+| Kalender „EMMA“ | „🧠 EMMA: …“: Emmas eigene Weckzeiten | laufend |
+
+Der Daily Report um 08:00 zeigt die Spuren der letzten 24 Stunden mit Link und den Budgetstand, z. B. „0,03 € von 5 €“.
+
+### Kanäle: was noch fehlt (Vorschläge für später)
+
+1. **E-Mail (IMAP/SMTP)** mit eigener Jarvis-Adresse: Mail-Sortierung, Entwürfe für Antworten (Phase 2)
+2. **WhatsApp Business**: der Webhook `metropolis-whatsapp` ist schon da, es fehlt der Zugang über die Meta-API
+3. **Google Kalender von Kunden, Buchungen aus dalino-app**: Termine automatisch ins Briefing
+4. **Sprachnachrichten in Telegram**: Transkription (kostet Tokens, erst mit Budget-Erfahrung)
+5. **Instagram/Facebook**: nur Entwürfe, Veröffentlichen immer mit Freigabe
+
 ## Emmas inneres Leben (`EMMA_COGNITIVE_LOOP`)
 
 Emma prüft alle 15 Minuten, ob sie aufwachen soll:
@@ -37,6 +70,7 @@ den Austausch mit Jarvis und Irinas Termine. Dann entscheidet sie selbst, was si
 | `add_agenda` | Thema, das sie mit Irina besprechen will (erscheint im Report, in `/agenda` und im nächsten Gespräch) |
 | `remember` | Langzeitgedächtnis (Ziele, Entscheidungen, Strategien, Learnings, Personen, Vorlieben) |
 | `message_irina` | Telegram-Nachricht an Irina |
+| `write_note` / `write_draft` | Google-Doc in `02_Wissen` bzw. `03_Entwuerfe` (höchstens 3 pro Zyklus) |
 | `run_engine` | Eine Fach-Engine arbeiten lassen |
 | `ask_jarvis` | Jarvis um eine zweite Meinung bitten |
 | `request_approval` | Um Freigabe bitten → Irina antwortet mit `/ok 12` oder `/nein 12` |
