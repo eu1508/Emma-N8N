@@ -74,14 +74,24 @@ eigene Tabellen ersetzt. Solange etwas offen ist, bricht der betroffene Workflow
 | Was n8n aufruft | Wofür | Erwartete Antwort | In core-os | Folge / Anpassung |
 |---|---|---|---|---|
 | `GET /api/v1/context?for=n8n` | Gedächtnis, letzter Chat, offene Aufgaben, Themen | `{ memory: [], recent_chat: [], tasks: [], agenda: [] }` (alle vier Felder müssen Listen sein) | **offen** | Orchestrator und Loop brechen ohne gültigen Kontext ab, kein KI-Aufruf |
-| `POST /api/v1/memory` | Erinnerung speichern | `{ id }` | **anders:** `POST /api/v1/memory/facts` (`topic`, `content`, `source_ref`, `confidence` als Query-Parameter), Suche `GET /api/v1/memory/search?q=` | Pfad und Format angleichen |
+| `POST /api/v1/memory/facts?topic=&content=&source_ref=&confidence=` | Erinnerung speichern (`topic` = Kategorie, `confidence` = Wichtigkeit 1–5 ÷ 5) | `{ id }` | vorhanden | **angeglichen** an core-os |
 | `POST /api/v1/tasks` | Aufgabe anlegen | `{ id }` | vorhanden (`title`, `priority`, `owner_bot`, `due_at`) | Antwortformat prüfen |
-| `POST /api/v1/tasks/{id}/complete` | Aufgabe erledigen | `{ ok }` | **anders:** `PATCH /api/v1/tasks/{id}` | anpassen |
+| `PATCH /api/v1/tasks/{id}` mit `{ status: "done" }` | Aufgabe erledigen | `{ ok }` | vorhanden | **angeglichen**; ob core-os den Status `done` so nennt, ist **unbestätigt** |
 | `POST /api/v1/approvals` | Freigabe anfragen (`source`, `reference`, `kind`, `summary`) | `{ id }` | **offen** (Freigaben entstehen dort aus Ereignissen über `POST /api/v1/events`) | ohne diesen Endpunkt kann n8n nichts vorschlagen |
 | `GET /api/v1/approvals?source=n8n&status=approved` | freigegebene Vorschläge | Liste oder `{ approvals \| items \| data: [...] }` | **teilweise:** `GET /api/v1/approvals` liefert `{ approvals: [ { id, decision_status, … } ] }` ohne Filter | der Executor filtert selbst nach dem Status und lässt alles ohne Status „approved“ liegen |
 | `POST /api/v1/approvals/{id}/result` | Ergebnis melden (`ok`, `detail`, `url`) | `{ ok }` | **offen** | Ergebnis bleibt nur in n8n (`n8n_action_queue`) |
 | core-os → `POST {n8n}/webhook/emma-approved` | Anstoß nach Freigabe (Header-Auth) | – | **offen** | sonst läuft der Executor nur nach dem Loop |
 | core-os → `POST {n8n}/webhook/metropolis-core` | Nachricht weiterreichen (`text`, `user_verified`) | `{ reply, proposals }` | **offen** | ohne Aufruf nutzt core-os den Orchestrator nicht |
+
+**Prüfen statt raten:** `tools/check_core_os.py` fragt alle Endpunkte oben **nur lesend** (GET) ab und zeigt je Zeile
+✅ vorhanden, ❌ fehlt oder ❔ unklar. Auf einem Rechner ausführen, der core-os erreicht:
+
+```
+CORE_OS_URL=http://<core-os>:<port> python3 tools/check_core_os.py
+```
+
+Verlangt core-os ein Token: zusätzlich `CORE_OS_AUTH_HEADER=<Header-Name>` und `CORE_OS_TOKEN=<Wert>` setzen (nur in der
+Shell, nie ins Repo). Die Ausgabe enthält kein Token und kann so zurückgemeldet werden.
 
 Schreibzugriffe auf core-os können ein Token verlangen (Header-Auth). Es gehört ins n8n-Credential **„core-os API“**, nie in einen Workflow.
 
@@ -151,7 +161,7 @@ Nutzer gewünschte sichtbare Spur. Soll auch das erst nach Freigabe passieren, `
    (nur Executor, zum Anlegen freigegebener Workflows).
 4. **Sub-Workflows verknüpfen** in allen `Execute Workflow`-Nodes: `EMMA_ENGINE_HUB`, `EMMA_PROPOSE`,
    `EMMA_APPROVED_EXECUTOR`, `EMMA_WAKE_TIMER`, `EMMA_COGNITIVE_LOOP`.
-5. **Erst wenn die core-os-Endpunkte bestätigt sind:** im Loop „Jetzt testen (Briefing)“ ausführen, danach aktivieren.
+5. **Erst wenn die core-os-Endpunkte bestätigt sind** (`tools/check_core_os.py` zeigt nur ✅): im Loop „Jetzt testen (Briefing)“ ausführen, danach aktivieren.
 
 ## Offene Punkte
 

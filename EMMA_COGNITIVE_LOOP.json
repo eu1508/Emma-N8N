@@ -494,14 +494,14 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{ $('Konfiguration').first().json.core_os_url + '/api/v1/tasks/' + encodeURIComponent($json.id) + '/complete' }}",
+        "method": "PATCH",
+        "url": "={{ $('Konfiguration').first().json.core_os_url + '/api/v1/tasks/' + encodeURIComponent($json.id) }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "options": {},
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ source: 'n8n-cognitive-loop' }) }}"
+        "jsonBody": "={{ JSON.stringify({ status: 'done' }) }}"
       },
       "id": "b5322d52-aaf5-585d-baa2-dd6607502c98",
       "name": "Aufgabe erledigt (core-os)",
@@ -522,13 +522,32 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $('Konfiguration').first().json.core_os_url + '/api/v1/memory' }}",
+        "url": "={{ $('Konfiguration').first().json.core_os_url + '/api/v1/memory/facts' }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "options": {},
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ category: $json.category, content: $json.content, importance: $json.importance, source: 'n8n-cognitive-loop' }) }}"
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "topic",
+              "value": "={{ $json.category }}"
+            },
+            {
+              "name": "content",
+              "value": "={{ $json.content }}"
+            },
+            {
+              "name": "source_ref",
+              "value": "n8n-cognitive-loop"
+            },
+            {
+              "name": "confidence",
+              "value": "={{ Math.min(5, Math.max(1, Number($json.importance) || 3)) / 5 }}"
+            }
+          ]
+        }
       },
       "id": "4f3703e8-9257-54f1-9000-8fa7b154d605",
       "name": "Merken (core-os)",
