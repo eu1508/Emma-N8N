@@ -24,7 +24,7 @@
 | `EMMA_PROPOSE` | Prüft Vorschläge (Art, Inhalt, Größe – Ungültiges bricht laut ab), legt sie in der Warteschlange ab und fragt die Freigabe bei core-os an: höchstens `EMMA_MAX_APPROVALS_PER_DAY` pro Tag und nicht in der Ruhezeit. Der Rest wartet und wird später nachgeholt. | Sub-Workflow |
 | `EMMA_APPROVED_EXECUTOR` | Führt **nur** aus, was core-os ausdrücklich als freigegeben meldet (fail-closed), prüft neue Workflows **erneut** gegen die Allowlist, loggt Erfolg oder Fehler und meldet das Ergebnis an core-os zurück | Webhook `emma-approved` (Auth) · nach jedem Loop · manuell |
 | `EMMA_ENGINE_HUB` | Eine Engine mit allen Fach-Rollen (FINANCE, LEGAL, SALES, CONTENT, LEAD, …) statt 30 Kopien | Sub-Workflow · Webhook `emma-engine` (Auth) |
-| `EMMA_SELF_BUILDER` | Entwirft einen Workflow nur aus erlaubten Node-Typen (ohne Zugangsdaten und Umgebungszugriff, höchstens 25 Nodes). Angelegt wird er erst nach Freigabe und dann **inaktiv**. | Webhook `emma-self-builder` (Auth) |
+| `EMMA_SELF_BUILDER` | Entwirft einen Workflow nur aus erlaubten Node-Typen (ohne Zugangsdaten und Umgebungszugriff, höchstens 25 Nodes). Angelegt wird er erst nach Freigabe und dann **inaktiv**. Emma ruft ihn in der Denkschleife selbst auf (`propose_workflow`, höchstens einmal pro Durchlauf, nicht bei ungeprüftem Anlass). | Webhook `emma-self-builder` (Auth) · Aufruf aus `EMMA_COGNITIVE_LOOP` |
 | `METROPOLIS_MULTI_AGENT_CORE` | Strategie-, Risiko- und Opportunity-Agent parallel | Webhook `multi-agent-core` (Auth) |
 | `METROPOLIS_DATA_GATEWAY` | Logs, Sync, KPIs, CRM-Leads | Webhooks `logging-engine`, `metropolis-sync`, `metropolis-kpi`, `crm-engine` (Auth) |
 
@@ -160,7 +160,7 @@ Nutzer gewünschte sichtbare Spur. Soll auch das erst nach Freigabe passieren, `
    (Header Auth für eingehende Webhooks), **core-os API** (Header Auth für Aufrufe an core-os), Header Auth mit n8n-API-Key
    (nur Executor, zum Anlegen freigegebener Workflows).
 4. **Sub-Workflows verknüpfen** in allen `Execute Workflow`-Nodes: `EMMA_ENGINE_HUB`, `EMMA_PROPOSE`,
-   `EMMA_APPROVED_EXECUTOR`, `EMMA_WAKE_TIMER`, `EMMA_COGNITIVE_LOOP`.
+   `EMMA_APPROVED_EXECUTOR`, `EMMA_WAKE_TIMER`, `EMMA_COGNITIVE_LOOP`, `EMMA_SELF_BUILDER`.
 5. **Erst wenn die core-os-Endpunkte bestätigt sind** (`tools/check_core_os.py` zeigt nur ✅): im Loop „Jetzt testen (Briefing)“ ausführen, danach aktivieren.
 
 ## Offene Punkte

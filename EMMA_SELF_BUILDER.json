@@ -40,7 +40,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const dat = s => String(s == null ? '' : s).replace(/<\\s*\\/?\\s*daten\\s*>/gi, '[daten]'); // Text von Dritten darf den Daten-Block nicht schliessen\nconst b = $('Webhook Input').first().json.body || {};\nconst task = dat(String(b.task || b.message || '').trim().slice(0, 2000));\nif (!task) throw new Error('Feld \"task\" fehlt');\nreturn [{ json: { task, task_key: task.toLowerCase().replace(/\\s+/g, ' ') } }];"
+        "jsCode": "const dat = s => String(s == null ? '' : s).replace(/<\\s*\\/?\\s*daten\\s*>/gi, '[daten]'); // Text von Dritten darf den Daten-Block nicht schliessen\n// Zwei Wege hinein: Webhook (von aussen, mit Auth) oder Aufruf aus der Denkschleife (Emma selbst).\nconst fromLoop = $('Von Emma (Denkschleife)').isExecuted;\nconst b = fromLoop ? $('Von Emma (Denkschleife)').first().json : ($('Webhook Input').first().json.body || {});\nconst task = dat(String(b.task || b.message || '').trim().slice(0, 2000));\nif (!task) throw new Error('Feld \"task\" fehlt');\nreturn [{ json: { task, task_key: task.toLowerCase().replace(/\\s+/g, ' '), from_loop: fromLoop,\n  source: fromLoop ? 'cognitive_loop' : 'self_builder' } }];"
       },
       "id": "f64e2af8-656f-52cb-8c06-4d963ac761b0",
       "name": "Normalize Input",
@@ -365,7 +365,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const w = $('Parse Workflow').first().json;\nreturn [{ json: { kind: 'create_workflow', summary: `Neuen Workflow ${w.workflow_name} anlegen (inaktiv)`, source: 'self_builder',\n  payload: { workflow_name: w.workflow_name, workflow_json: w.workflow_json } } }];"
+        "jsCode": "const w = $('Parse Workflow').first().json;\nconst src = $('Normalize Input').first().json.source;\nreturn [{ json: { kind: 'create_workflow', summary: `Neuen Workflow ${w.workflow_name} anlegen (inaktiv)`, source: src,\n  payload: { workflow_name: w.workflow_name, workflow_json: w.workflow_json } } }];"
       },
       "id": "f4c2d682-f1f9-5d7b-b0e9-c2923c090c00",
       "name": "Vorschlag bauen",
@@ -408,6 +408,157 @@
       "position": [
         3200,
         480
+      ]
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "cb043c5f-ad90-5153-a571-7b46d0af1e81",
+      "name": "Von Emma (Denkschleife)",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "468b7bda-9d3c-5b66-ae5d-611c58906cff",
+              "leftValue": "={{ $('Normalize Input').first().json.from_loop }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "28149113-7ab0-58a3-b350-ed538289779f",
+      "name": "Webhook? (schon gebaut)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        800,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $input.first().json;\nreturn [{ json: { duplicate: true, workflow_name: r.workflow_name, status: r.status } }];"
+      },
+      "id": "1d1a2643-61c7-5882-8652-39b7a663f1b1",
+      "name": "An Emma: schon gebaut",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "ad8ef99d-03f3-520b-8a4e-e6ea33c27f05",
+              "leftValue": "={{ $('Normalize Input').first().json.from_loop }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ef8f1f5d-6b63-548b-9a4f-581dff84b79d",
+      "name": "Webhook? (Budget)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "throw new Error('Monatsbudget erreicht – kein Workflow-Entwurf.');"
+      },
+      "id": "08e34bb0-c5dd-5563-9ab9-d728b1116687",
+      "name": "An Emma: Budget erreicht",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        860
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "137b42cf-f639-5956-bc10-97fe6538e79f",
+              "leftValue": "={{ $('Normalize Input').first().json.from_loop }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "9fabb453-0f1f-5b2d-9994-5df195588bf1",
+      "name": "Webhook? (Ergebnis)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        3000,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $input.first().json;\nreturn [{ json: { pending_approval: true, workflow_name: $('Parse Workflow').first().json.workflow_name, approval_id: r.approval_id ?? null } }];"
+      },
+      "id": "aecda5e9-d816-5bbc-b011-c2891a0fc40e",
+      "name": "An Emma: Vorschlag erstellt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3200,
+        640
       ]
     }
   ],
@@ -460,7 +611,7 @@
       "main": [
         [
           {
-            "node": "Respond Existing",
+            "node": "Webhook? (schon gebaut)",
             "type": "main",
             "index": 0
           }
@@ -496,7 +647,7 @@
         ],
         [
           {
-            "node": "Respond Budget",
+            "node": "Webhook? (Budget)",
             "type": "main",
             "index": 0
           }
@@ -558,7 +709,7 @@
         ],
         [
           {
-            "node": "Respond Budget",
+            "node": "Webhook? (Budget)",
             "type": "main",
             "index": 0
           }
@@ -624,7 +775,72 @@
       "main": [
         [
           {
+            "node": "Webhook? (Ergebnis)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Von Emma (Denkschleife)": {
+      "main": [
+        [
+          {
+            "node": "Konfiguration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook? (schon gebaut)": {
+      "main": [
+        [
+          {
+            "node": "Respond Existing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "An Emma: schon gebaut",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook? (Budget)": {
+      "main": [
+        [
+          {
+            "node": "Respond Budget",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "An Emma: Budget erreicht",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook? (Ergebnis)": {
+      "main": [
+        [
+          {
             "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "An Emma: Vorschlag erstellt",
             "type": "main",
             "index": 0
           }

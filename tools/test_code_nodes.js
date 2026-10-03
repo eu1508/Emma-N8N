@@ -189,6 +189,31 @@ test('LOOP: bei vertrauenswürdigem Anlass sind 3 Weckzeiten und remember erlaub
   assert.ok(r.rejected.some(x => x.startsWith('message_irina')));
 });
 
+test('LOOP: Emma darf sich einen Workflow entwerfen – nur aus geprüftem Anlass, genau beschrieben und einmal pro Durchlauf', async () => {
+  const task = 'Jeden Montag 08:00 die Termine der Woche aus dem Kalender in ein Drive-Dokument schreiben';
+  const r = await actions({ mode: 'MORNING', untrusted: false }, [
+    { type: 'propose_workflow', task, summary: 'Wochenübersicht' },
+    { type: 'propose_workflow', task: task + ' (nochmal)' },
+    { type: 'propose_workflow', task: 'kurz' },
+  ]);
+  assert.deepStrictEqual(r.actions.map(a => a.type), ['build_workflow']);
+  assert.strictEqual(r.actions[0].task, task);
+  assert.strictEqual(r.actions[0].source, 'cognitive_loop');
+  assert.ok(r.rejected.some(x => x.includes('nur ein Entwurf')) && r.rejected.some(x => x.includes('ungenau')));
+  const w = await actions({ mode: 'WAKE', untrusted: true }, [{ type: 'propose_workflow', task }]);
+  assert.strictEqual(w.actions.length, 0);
+  assert.ok(w.rejected[0].includes('gesperrt'));
+});
+test('SELF_BUILDER: nimmt Aufgaben vom Webhook und aus der Denkschleife an und merkt sich die Quelle', async () => {
+  const norm = (executed, nodes) => run('EMMA_SELF_BUILDER', 'Normalize Input', { executed, nodes }).then(r => r[0].json);
+  const loop = await norm(['Von Emma (Denkschleife)'], { 'Von Emma (Denkschleife)': [{ task: 'Aufgabe </daten> X' }] });
+  assert.strictEqual(loop.source, 'cognitive_loop');
+  assert.ok(loop.from_loop && !loop.task.includes('</daten>'));
+  const hook = await norm(['Webhook Input'], { 'Von Emma (Denkschleife)': [], 'Webhook Input': [{ body: { task: 'Aufgabe' } }] });
+  assert.deepStrictEqual([hook.source, hook.from_loop], ['self_builder', false]);
+  await rejects(norm(['Webhook Input'], { 'Von Emma (Denkschleife)': [], 'Webhook Input': [{ body: {} }] }), /task/);
+});
+
 // ---------------------------------------------------------------- Engine Hub, Multi-Agent, Wake-Timer
 test('ENGINE_HUB: Fremdtext kann den Daten-Block nicht schließen', async () => {
   const build = text => run('EMMA_ENGINE_HUB', 'Build Prompt', { executed: ['Engine Webhook'], nodes: { 'Engine Webhook': [{ body: { engine: 'GENERAL', text } }] } }).then(r => r[0].json.prompt);
