@@ -1,0 +1,105 @@
+{
+  "name": "EMMA_WAKE_TIMER",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "4690f143-0494-520f-b4cf-a47be3a34a2c",
+      "name": "Timer",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const j = $input.first().json;\nconst t = Date.parse(j.at);\nif (!(t > Date.now() + 10 * 60000 && t < Date.now() + 7 * 86400000)) throw new Error('Weckzeit außerhalb 10 min … 7 Tage');\nreturn [{ json: { at: new Date(t).toISOString(), title: String(j.title || '').slice(0, 80), reason: String(j.reason || '').slice(0, 300) } }];"
+      },
+      "id": "fab0f705-1649-5428-9fb4-f842b7799bb0",
+      "name": "Zeit prüfen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resume": "specificTime",
+        "dateTime": "={{ $json.at }}"
+      },
+      "id": "9f18c4ed-28ef-573c-9969-debd9aaabdcf",
+      "name": "Warten",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "EMMA_COGNITIVE_LOOP"
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "b8eb9830-1e1e-59d0-9cc0-afa1987e5362",
+      "name": "Emma wecken",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        660,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Timer": {
+      "main": [
+        [
+          {
+            "node": "Zeit prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zeit prüfen": {
+      "main": [
+        [
+          {
+            "node": "Warten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Warten": {
+      "main": [
+        [
+          {
+            "node": "Emma wecken",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Berlin"
+  }
+}
