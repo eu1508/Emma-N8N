@@ -1,0 +1,777 @@
+{
+  "name": "EMMA_APPROVED_EXECUTOR",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "emma-approved",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "id": "8322c579-5266-55c6-9772-48891ece0560",
+      "name": "core-os: Freigabe erteilt",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        200
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "EMMA_WEBHOOK_AUTH",
+          "name": "EMMA Webhook Auth"
+        }
+      },
+      "webhookId": "d31572ac-f08b-55be-a39d-21a7fab00b35"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "d25a00fa-03b0-56b7-a682-2f3323ac94e8",
+      "name": "Aus der Denk-Schleife",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        400
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "bf086ea9-2c4b-56ba-89cc-77287dae611c",
+      "name": "Jetzt ausführen",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Einstellungen kommen aus Umgebungsvariablen des n8n-Containers – nie Werte ins Repo schreiben.\nconst env = k => { try { return $env[k]; } catch (e) { return undefined; } };\nconst cfg = {\n  core_os_url: String(env('EMMA_CORE_OS_URL') || '').replace(/\\/$/, ''),\n  budget_eur: Number(env('EMMA_BUDGET_EUR') || 5),\n  daily_docs: String(env('EMMA_DAILY_DOCS') || 'on') !== 'off',\n  n8n_url: String(env('EMMA_N8N_URL') || 'http://localhost:5678').replace(/\\/$/, ''), // interne n8n-API fuer freigegebene Workflows\n  calendar_id: String(env('EMMA_CALENDAR_ID') || ''),\n  drive_notes: String(env('EMMA_DRIVE_FOLDER_NOTES') || ''),\n  drive_drafts: String(env('EMMA_DRIVE_FOLDER_DRAFTS') || ''),\n};\nif (!cfg.core_os_url) throw new Error('EMMA_CORE_OS_URL ist nicht gesetzt – ohne core-os arbeitet EMMA nicht.');\nreturn [{ json: cfg }];"
+      },
+      "id": "ce926b1f-e3ae-5fb0-8e7a-cd90fa6bef92",
+      "name": "Konfiguration",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Konfiguration').first().json.core_os_url + '/api/v1/approvals?source=n8n&status=approved' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "dffdaf98-6c8d-553d-9674-ea5d971e127e",
+      "name": "Freigaben abrufen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        400
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CORE_OS_API",
+          "name": "core-os API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// core-os ist die Wahrheit: nur was dort AUSDRUECKLICH freigegeben ist, wird ausgefuehrt (fail-closed).\n// Ignoriert core-os die Filter der Abfrage, zaehlt trotzdem nur, was selbst den Status \"approved\" traegt.\nconst body = $input.first().json;\nconst list = Array.isArray(body) ? body : (body.approvals || body.items || body.data);\nif (!Array.isArray(list)) throw new Error('Antwort von core-os auf die Freigabe-Abfrage ist keine Liste - nichts wird ausgefuehrt.');\nconst approved = a => a && /^(approved|freigegeben)$/i.test(String(a.decision_status ?? a.status ?? '')) && (a.source === undefined || a.source === 'n8n');\nreturn [{ json: { ids: list.filter(approved).map(a => String(a.id)).filter(Boolean) } }];"
+      },
+      "id": "0e2b6f8b-af03-5ec9-9aad-447f46ddfa90",
+      "name": "Freigegebene IDs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE n8n_action_queue SET status = 'running', started_at = now()\nWHERE status = 'proposed' AND core_os_approval_id IN (SELECT jsonb_array_elements_text($1::jsonb))\nRETURNING id, kind, payload, core_os_approval_id;",
+        "options": {
+          "queryReplacement": "={{ [ JSON.stringify($json.ids) ] }}"
+        }
+      },
+      "id": "88062108-ba10-5d62-a9fc-6a8ce3ed5c5b",
+      "name": "Offene Vorschläge",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        880,
+        400
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "q2sycFRoxqP47oRY",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "loose"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.kind }}",
+                    "rightValue": "run_engine",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "run_engine"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "loose"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.kind }}",
+                    "rightValue": "write_note",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "write_note"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "loose"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.kind }}",
+                    "rightValue": "write_draft",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "write_draft"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "loose"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.kind }}",
+                    "rightValue": "calendar_event",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "calendar_event"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "loose"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.kind }}",
+                    "rightValue": "create_workflow",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "create_workflow"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "83e6281e-2d87-5312-a3f6-73cd8890446f",
+      "name": "Art?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        1100,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(i => ({ json: { engine: i.json.payload.engine, text: i.json.payload.text, session_id: 'APPROVED_' + i.json.id } }));"
+      },
+      "id": "4e38a1dd-6c26-5ef7-941b-86dfc4d9925d",
+      "name": "Engine-Auftrag",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "EMMA_ENGINE_HUB"
+        },
+        "options": {},
+        "mode": "each"
+      },
+      "id": "7451cd52-38d6-59d6-8eb8-9df1b63851dd",
+      "name": "Engine ausführen",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1540,
+        100
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "createFromText",
+        "content": "={{ $json.payload.content }}",
+        "name": "=Wissen – {{ $json.payload.title }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Konfiguration').first().json.drive_notes }}"
+        },
+        "options": {
+          "convertToGoogleDocument": true
+        }
+      },
+      "id": "5078a9cc-f0eb-5a97-89b9-c7b2668ddec6",
+      "name": "Notiz schreiben",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1320,
+        260
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "pPIrGVpsjeRmbONb",
+          "name": "Google Drive account 3"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "createFromText",
+        "content": "={{ $json.payload.content }}",
+        "name": "=Entwurf – {{ $json.payload.title }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Konfiguration').first().json.drive_drafts }}"
+        },
+        "options": {
+          "convertToGoogleDocument": true
+        }
+      },
+      "id": "c29b78a8-46e3-5728-b152-7df3ff66c248",
+      "name": "Entwurf schreiben",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1320,
+        400
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "pPIrGVpsjeRmbONb",
+          "name": "Google Drive account 3"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Konfiguration').first().json.calendar_id }}"
+        },
+        "start": "={{ $json.payload.start }}",
+        "end": "={{ $json.payload.end }}",
+        "additionalFields": {
+          "summary": "={{ $json.payload.title }}",
+          "description": "=Von EMMA vorgeschlagen, in core-os freigegeben (Freigabe {{ $json.core_os_approval_id }})."
+        }
+      },
+      "id": "e293b285-e1b9-5016-8c66-b01764e1e8b9",
+      "name": "Kalendereintrag",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.2,
+      "position": [
+        1320,
+        540
+      ],
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "PvRehrj9UQU73yd9",
+          "name": "Google Calendar account 2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Konfiguration').first().json.n8n_url + '/api/v1/workflows' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ name: $json.workflow_name, nodes: $json.workflow_json.nodes, connections: $json.workflow_json.connections, settings: { executionOrder: 'v1' } }) }}",
+        "options": {}
+      },
+      "id": "09225823-3b6a-5a3a-a7cf-25d5131bc5b6",
+      "name": "Workflow anlegen (inaktiv)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        620
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Lau5yq5x6pY6u28A",
+          "name": "Header Auth"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Jede Aktion meldet Erfolg oder Fehler – nichts wird ungeprüft als erledigt verbucht.\nconst out = $input.all().map((item, idx) => {\n  const r = item.json;\n  const q = $('Offene Vorschläge').itemMatching(idx)?.json || {};\n  const ok = !r.error && r.status !== 'budget_exceeded' && r.status !== 'parse_error';\n  let url = '';\n  if (q.kind === 'write_note' || q.kind === 'write_draft') url = r.id ? 'https://docs.google.com/document/d/' + r.id : '';\n  if (q.kind === 'calendar_event') url = r.htmlLink || '';\n  return { json: {\n    queue_id: q.id, approval_id: q.core_os_approval_id, kind: q.kind, ok,\n    url, title: r.name || r.summary || q.payload?.title || q.payload?.workflow_name || q.kind,\n    detail: ok ? (r.summary || r.name || r.id || 'ok') : String(r.error?.message || r.error || r.status || 'Fehler'),\n  } };\n});\nreturn out;"
+      },
+      "id": "9b695878-fc02-58a2-a7c5-9f53e42bdcc3",
+      "name": "Ergebnis sammeln",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH upd AS (\n  UPDATE n8n_action_queue SET status = CASE WHEN $2 THEN 'done' ELSE 'failed' END, result = $3, finished_at = now()\n  WHERE id = $1\n), art AS (\n  INSERT INTO emma_artifacts (kind, title, url) SELECT $4, $5, $6 WHERE $2 AND $6 <> ''\n), reg AS (\n  UPDATE workflow_registry SET status = CASE WHEN $2 THEN 'created_inactive' ELSE 'failed' END\n  WHERE $4 = 'create_workflow' AND workflow_name = $5\n)\nSELECT $1::bigint AS queue_id;",
+        "options": {
+          "queryReplacement": "={{ [ $json.queue_id, $json.ok, $json.detail, $json.kind === 'write_note' ? 'wissen' : $json.kind === 'write_draft' ? 'entwurf' : $json.kind === 'calendar_event' ? 'kalender' : $json.kind, $json.title, $json.url ] }}"
+        }
+      },
+      "id": "c4f1e667-734b-5314-9c86-37ec9794ce3e",
+      "name": "Ergebnis loggen",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2020,
+        400
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "q2sycFRoxqP47oRY",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Konfiguration').first().json.core_os_url + '/api/v1/approvals/' + encodeURIComponent($('Ergebnis sammeln').item.json.approval_id) + '/result' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ ok: $('Ergebnis sammeln').item.json.ok, detail: $('Ergebnis sammeln').item.json.detail, url: $('Ergebnis sammeln').item.json.url }) }}"
+      },
+      "id": "194ea138-ec21-5712-a9e9-3eb3c6b5d570",
+      "name": "Ergebnis an core-os",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2240,
+        400
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CORE_OS_API",
+          "name": "core-os API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Allowlist: kein Code, kein Execute Command, kein beliebiger HTTP-Request, keine Webhooks. (Dieselbe Pruefung laeuft vor dem Anlegen erneut im EMMA_APPROVED_EXECUTOR.)\nconst ALLOWED = new Set([\"n8n-nodes-base.manualTrigger\", \"n8n-nodes-base.scheduleTrigger\", \"n8n-nodes-base.executeWorkflowTrigger\", \"n8n-nodes-base.set\", \"n8n-nodes-base.if\", \"n8n-nodes-base.switch\", \"n8n-nodes-base.merge\", \"n8n-nodes-base.noOp\", \"n8n-nodes-base.filter\", \"n8n-nodes-base.sort\", \"n8n-nodes-base.limit\", \"n8n-nodes-base.dateTime\", \"n8n-nodes-base.googleSheets\", \"n8n-nodes-base.googleCalendar\", \"n8n-nodes-base.googleDrive\", \"@n8n/n8n-nodes-langchain.chainLlm\", \"@n8n/n8n-nodes-langchain.lmChatGoogleGemini\"]);\nconst MAX_NODES = 25, MAX_BYTES = 60000;\nconst FORBIDDEN = /\\$env|\\$vars|\\$secrets|\\$execution|process\\.|require\\s*\\(|import\\s*\\(|child_process|__proto__|constructor|eval\\s*\\(|Function\\s*\\(/i;\nconst checkWorkflow = wf => {\n  if (!wf || typeof wf !== 'object' || !Array.isArray(wf.nodes) || !wf.nodes.length) return { error: 'Workflow ohne Nodes' };\n  if (wf.nodes.length > MAX_NODES) return { error: `Zu viele Nodes (max. ${MAX_NODES})` };\n  if (JSON.stringify(wf).length > MAX_BYTES) return { error: 'Workflow zu gross' };\n  const names = new Set();\n  for (const n of wf.nodes) {\n    if (!n || typeof n.name !== 'string' || !n.name) return { error: 'Node ohne Namen' };\n    if (names.has(n.name)) return { error: `Doppelter Node-Name: ${n.name}` };\n    names.add(n.name);\n    if (!ALLOWED.has(n.type)) return { error: `Nicht erlaubter Node-Typ: ${n.name} (${n.type})` };\n    if (FORBIDDEN.test(JSON.stringify(n.parameters || {}))) return { error: `Node ${n.name}: Zugriff auf Umgebung oder Code nicht erlaubt` };\n  }\n  const connections = wf.connections && typeof wf.connections === 'object' ? wf.connections : {};\n  for (const [from, kinds] of Object.entries(connections)) {\n    for (const t of [from, ...Object.values(kinds).flat(2).map(c => c && c.node)]) if (t && !names.has(t)) return { error: `Verbindung auf unbekannten Node: ${t}` };\n  }\n  // Zugangsdaten und Webhook-IDs entfernen: der Nutzer verknuepft sie selbst, bevor er den Workflow aktiviert.\n  const nodes = wf.nodes.map(({ credentials, webhookId, ...rest }) => rest);\n  return { workflow: { nodes, connections } };\n};\n// Ausgefuehrt wird nur, was die Allowlist auch JETZT noch besteht - egal, was in der Warteschlange steht.\nreturn $input.all().map((i, idx) => {\n  const q = i.json;\n  const name = String((q.payload || {}).workflow_name || '');\n  const checked = /^EMMA_AUTO_[A-Z0-9_]{1,60}$/.test(name) ? checkWorkflow((q.payload || {}).workflow_json) : { error: 'Ungueltiger Workflow-Name' };\n  return { json: { ...q, valid: !checked.error, reject_reason: checked.error || '', workflow_name: name, workflow_json: checked.workflow || null }, pairedItem: { item: idx } };\n});"
+      },
+      "id": "67023622-b5d1-5879-b4b3-2443d44efd77",
+      "name": "Workflow prüfen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        680
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "a36ee9c8-76f8-5e83-acae-33249ea35213",
+              "leftValue": "={{ $json.valid === true }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a9a71d1a-05d2-5c6d-81e3-8cb231d450f3",
+      "name": "Workflow gültig?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        680
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map((i, idx) => ({ json: { error: { message: 'Workflow abgelehnt: ' + i.json.reject_reason } }, pairedItem: { item: idx } }));"
+      },
+      "id": "cfd04f00-5f32-587f-8f96-5a23c41728b0",
+      "name": "Workflow abgelehnt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        780
+      ]
+    }
+  ],
+  "connections": {
+    "core-os: Freigabe erteilt": {
+      "main": [
+        [
+          {
+            "node": "Konfiguration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aus der Denk-Schleife": {
+      "main": [
+        [
+          {
+            "node": "Konfiguration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jetzt ausführen": {
+      "main": [
+        [
+          {
+            "node": "Konfiguration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Konfiguration": {
+      "main": [
+        [
+          {
+            "node": "Freigaben abrufen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Freigaben abrufen": {
+      "main": [
+        [
+          {
+            "node": "Freigegebene IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Freigegebene IDs": {
+      "main": [
+        [
+          {
+            "node": "Offene Vorschläge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Offene Vorschläge": {
+      "main": [
+        [
+          {
+            "node": "Art?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Art?": {
+      "main": [
+        [
+          {
+            "node": "Engine-Auftrag",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notiz schreiben",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Entwurf schreiben",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Kalendereintrag",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Workflow prüfen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Engine-Auftrag": {
+      "main": [
+        [
+          {
+            "node": "Engine ausführen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Engine ausführen": {
+      "main": [
+        [
+          {
+            "node": "Ergebnis sammeln",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notiz schreiben": {
+      "main": [
+        [
+          {
+            "node": "Ergebnis sammeln",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entwurf schreiben": {
+      "main": [
+        [
+          {
+            "node": "Ergebnis sammeln",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kalendereintrag": {
+      "main": [
+        [
+          {
+            "node": "Ergebnis sammeln",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Workflow anlegen (inaktiv)": {
+      "main": [
+        [
+          {
+            "node": "Ergebnis sammeln",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ergebnis sammeln": {
+      "main": [
+        [
+          {
+            "node": "Ergebnis loggen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ergebnis loggen": {
+      "main": [
+        [
+          {
+            "node": "Ergebnis an core-os",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Workflow prüfen": {
+      "main": [
+        [
+          {
+            "node": "Workflow gültig?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Workflow gültig?": {
+      "main": [
+        [
+          {
+            "node": "Workflow anlegen (inaktiv)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Workflow abgelehnt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Workflow abgelehnt": {
+      "main": [
+        [
+          {
+            "node": "Ergebnis sammeln",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Berlin"
+  }
+}
