@@ -30,3 +30,14 @@ assert.strictEqual(r2.alarme.length + r2.warnungen.length, 0, 'keine doppelten M
 assert.strictEqual(grundAdresse('Max.Muster+mama@gmail.com'), 'maxmuster@gmail.com');
 assert.strictEqual(pruefe([{ json: {} }], {}, jetzt).hatAlarm, false, 'leerer Lauf ohne Alarm');
 console.log('Alle Tests bestanden.');
+
+// Interne Profil-Mail als HTML-Tabelle (wie „neues Profil von Mareike“)
+{
+  const html = '<table><tr><td>Name</td><td>Mareike</td></tr><tr><td>E-Mail</td><td><a href="mailto:mareike@example.de">mareike@example.de</a></td></tr><tr><td>Telefon</td><td>0152 000</td></tr><tr><td>Alter der Kinder</td><td>0–1 Jahr</td></tr></table>';
+  const r3 = pruefe([{ json: { id: 'h1', subject: 'Eltern-Match: neues Profil von Mareike', from: f(I), to: f(I), date: '2026-11-25T20:40:00Z', html, text: 'NameMareikeE-Mailmareike@example.deTelefon0152 000' } }], {}, jetzt);
+  assert(/Mareike hat/.test(r3.alarme.join('\n')), 'Name aus HTML-Tabelle');
+  assert(r3.statistik.aktiveProfile === 1, 'ein Profil');
+  const st = {}; pruefe([{ json: { id: 'h1', subject: 'Eltern-Match: neues Profil von Mareike', from: f(I), to: f(I), date: '2026-11-25T20:40:00Z', html, text: 'NameMareikeE-Mailmareike@example.deTelefon0152 000' } }], st, jetzt);
+  assert.deepStrictEqual(Object.keys(st.profile), ['mareike@example.de'], 'saubere Adresse statt Textbrei');
+  console.log('HTML-Tests bestanden.');
+}

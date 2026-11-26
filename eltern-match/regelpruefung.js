@@ -89,8 +89,14 @@ function pruefe(nachrichten, state, jetzt) {
 
   // Profile aus Formular-Mails
   const profile = formulare.map(m => {
-    const mail = feldAusFormular(m.text, 'E-Mail') || (m.text.match(/[\w.+-]+@[\w.-]+\.\w+/g) || []).find(a => a.toLowerCase() !== KONFIG.absender) || '';
-    return { mail: (mail.match(/[\w.+-]+@[\w.-]+\.\w+/) || [mail])[0].toLowerCase(), roh: mail, name: feldAusFormular(m.text, 'Name'), alter: feldAusFormular(m.text, '(?:Alter der Kinder)'), m };
+    // Interne Profil-Mails kommen als HTML-Tabelle: Text hat dann kein „Name: …“ pro Zeile.
+    const klar = m.inhalt.replace(/<\/(td|th|tr|p|div)>/gi, '\n').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ');
+    const roh = feldAusFormular(m.text, 'E-Mail') || feldAusFormular(klar, 'E-Mail') || '';
+    const adressen = ((roh + ' ' + klar).match(/[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}/gi) || []).map(a => a.toLowerCase()).filter(a => a !== KONFIG.absender);
+    const mail = /https?:\/\//i.test(roh) ? roh : (adressen[0] || roh);
+    const name = (m.betreff.match(/neues Profil von\s+(.+)$/i) || [])[1] || feldAusFormular(m.text, 'Name') || feldAusFormular(klar, 'Name');
+    const alter = feldAusFormular(m.text, 'Alter der Kinder') || (klar.match(/Alter der Kinder\s*:?\s*\n?\s*([^\n]+)/i) || [])[1] || '';
+    return { mail: /https?:\/\//i.test(mail) ? mail : mail.toLowerCase(), roh, name: (name || '').trim(), alter: alter.trim(), m };
   });
   state.profile = state.profile || {};
   profile.forEach(p => { if (p.mail) state.profile[grundAdresse(p.mail)] = { name: p.name, seit: p.m.datum.toISOString() }; });
