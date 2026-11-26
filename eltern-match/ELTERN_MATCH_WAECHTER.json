@@ -1,0 +1,569 @@
+{
+  "name": "ELTERN_MATCH_WAECHTER",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 30
+            }
+          ]
+        }
+      },
+      "id": "329c378b-b915-5ab8-a859-07e9c1b8fa99",
+      "name": "Alle 30 Minuten",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": 100,
+        "simple": false,
+        "filters": {
+          "q": "newer_than:30d (subject:\"Eltern-Match\" OR subject:\"ELTERN-MATCH\" OR \"ELTERN-MATCH Profil\" OR from:mailer-daemon OR from:postmaster)",
+          "includeSpamTrash": false
+        },
+        "options": {}
+      },
+      "id": "4e9638a3-bc77-5a78-833a-dbee1a8998ad",
+      "name": "Gmail: letzte 100 Eltern-Match-Mails",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        220,
+        0
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "BITTE_AUSWAEHLEN",
+          "name": "Gmail info@dalinowellness.de"
+        }
+      },
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "// Eltern-Match Wächter: Regelprüfung\n// Läuft im n8n-Code-Node \"Regelprüfung\" (Modus: Run Once for All Items).\n// Eingabe: bis zu 100 Gmail-Nachrichten aus info@dalinowellness.de (Gmail-Node, Simplify AUS).\n// Ausgabe: genau 1 Item mit { alarme, warnungen, testprofile, statistik, telegramText, hatAlarm }.\n// Bereits gemeldete Funde merkt sich der Workflow (Static Data), damit Emma nicht doppelt alarmiert wird.\n\nconst KONFIG = {\n  absender: 'info@dalinowellness.de',\n  // Pflichtbestandteile jeder Mail an Eltern\n  pflicht: [\n    { muster: /pages\\/impressum/i, text: 'Impressum-Link fehlt' },\n    { muster: /datenschutz-eltern-match/i, text: 'Datenschutz-Link fehlt' },\n    { muster: /LÖSCHEN/, text: 'Hinweis „LÖSCHEN“ (Widerruf) fehlt' },\n    { muster: /dalino-kids-logo|dalino-logo/i, text: 'Logo fehlt (alte Vorlage?)' },\n    { muster: /Dalino-Kids-Team/, text: 'Gruß „Dein Dalino-Kids-Team“ fehlt (alte Vorlage?)' },\n  ],\n  // Darf in keiner Mail an Eltern stehen\n  verboten: [\n    { muster: /sent automatically with/i, text: 'n8n-Hinweis „This email was sent automatically with n8n“' },\n    { muster: /Hallo\\s+(Kundin|Kunde|undefined|null)\\b|Hallo\\s*,\\s*<|Hallo\\s*,\\s*$/im, text: 'Anrede ohne echten Namen („Hallo Kundin“ o. Ä.)' },\n    { muster: /\\{\\{|\\}\\}|\\$json|undefined|NaN|\\[object Object\\]/, text: 'Platzhalter/Technikfehler im Text ({{ }}, undefined …)' },\n    { muster: /Kaulbachstra(ß|ss)e 51(?!\\s*[–-])/, text: 'Alte Adresse „Kaulbachstraße 51“ statt „Kaulbachstr. 51–53“' },\n  ],\n  werbeblock: /Neues aus der Dalino-Welt|Dalino Longevity ansehen|Mehr zu HBOT/i,\n  // Testprofile, die nie an echte Eltern gematcht werden dürfen\n  testMuster: [/\\btest/i, /rueb\\.eu/i, /irniarueb/i, /irinarueb/i, /ruebeu@/i, /\\+mama@/i, /\\[TEST\\]/i, /Testprofil/i, /Testkopie/i],\n  bestaetigungMinuten: 30,   // so schnell muss „Danke für dein Profil“ / „Danke, wir haben deine Antwort“ raus\n  stilleStunden: 24,         // Profile kommen rein, aber 24 h keine Mail raus = Störung\n};\n\nfunction adresse(feld) {\n  if (!feld) return '';\n  if (typeof feld === 'string') { const m = feld.match(/[\\w.+-]+@[\\w.-]+\\.\\w+/); return m ? m[0].toLowerCase() : ''; }\n  if (feld.value && feld.value[0]) return String(feld.value[0].address || '').toLowerCase();\n  if (feld.text) return adresse(feld.text);\n  return '';\n}\nfunction alleAdressen(feld) {\n  if (!feld) return [];\n  if (feld.value) return feld.value.map(v => String(v.address || '').toLowerCase()).filter(Boolean);\n  const s = typeof feld === 'string' ? feld : (feld.text || '');\n  return (s.match(/[\\w.+-]+@[\\w.-]+\\.\\w+/g) || []).map(a => a.toLowerCase());\n}\n// Gmail schickt von „name+alias@gmail.com“ immer ab „name@gmail.com“ – für den Abgleich normalisieren.\nfunction grundAdresse(a) {\n  a = (a || '').toLowerCase();\n  const [lokal, domain] = a.split('@');\n  if (!domain) return a;\n  let l = lokal.replace(/\\+.*$/, '');\n  if (/^(gmail|googlemail)\\.com$/.test(domain)) l = l.replace(/\\./g, '');\n  return l + '@' + domain;\n}\nfunction gueltigeAdresse(a) { return /^[^\\s@]+@[^\\s@]+\\.[a-z]{2,}$/i.test(a || ''); }\nfunction feldAusFormular(text, name) {\n  const m = (text || '').match(new RegExp('^\\\\s*(?:\\\\d+\\\\.\\\\s*)?' + name + ':\\\\s*(.+)$', 'im'));\n  return m ? m[1].trim() : '';\n}\n\nfunction pruefe(nachrichten, state, jetzt) {\n  state.gemeldet = state.gemeldet || {};\n  const alarme = [], warnungen = [], testMap = {};\n  const neu = (schluessel) => { if (state.gemeldet[schluessel]) return false; state.gemeldet[schluessel] = jetzt.toISOString(); return true; };\n\n  const mails = nachrichten.filter(n => (n.json || n).id).map(n => {\n    const j = n.json || n;\n    const html = j.html || j.textAsHtml || '';\n    const text = j.text || '';\n    const von = adresse(j.from);\n    return {\n      id: j.id, betreff: j.subject || '', von, an: alleAdressen(j.to),\n      datum: new Date(j.date || (j.internalDate ? Number(j.internalDate) : jetzt)),\n      inhalt: html + '\\n' + text, text: text || html.replace(/<[^>]+>/g, ' '), labels: j.labelIds || [],\n    };\n  });\n\n  const ausgehend = mails.filter(m => m.von === KONFIG.absender && !m.an.every(a => a === KONFIG.absender));\n  const intern = mails.filter(m => m.von === KONFIG.absender && m.an.every(a => a === KONFIG.absender));\n  const bounces = mails.filter(m => /mailer-daemon|postmaster/i.test(m.von) || /Delivery Status Notification|Undeliverable|Unzustellbar|nicht zugestellt/i.test(m.betreff));\n  const formulare = mails.filter(m => /ELTERN-MATCH Profil|neues Profil von/i.test(m.inhalt + m.betreff) && !bounces.includes(m));\n  const antworten = mails.filter(m => m.von !== KONFIG.absender && /Eltern-Match\\s+(JA|SCHREIBEN|NEIN)\\b/i.test(m.betreff));\n  const optins = mails.filter(m => m.von !== KONFIG.absender && /NEUIGKEITEN JA/i.test(m.betreff));\n  const optouts = mails.filter(m => m.von !== KONFIG.absender && /KEINE WERBUNG/i.test(m.betreff + ' ' + m.text.slice(0, 200)));\n  const loeschen = mails.filter(m => m.von !== KONFIG.absender && /\\bLÖSCHEN\\b/.test(m.betreff + ' ' + m.text.slice(0, 200)));\n\n  // Opt-in-Liste pflegen (Double-Opt-in bestätigt = Antwort NEUIGKEITEN JA, Abmeldung = KEINE WERBUNG)\n  state.optin = state.optin || {};\n  optins.forEach(m => { state.optin[grundAdresse(m.von)] = m.datum.toISOString(); });\n  optouts.forEach(m => { delete state.optin[grundAdresse(m.von)]; });\n\n  // Profile aus Formular-Mails\n  const profile = formulare.map(m => {\n    // Interne Profil-Mails kommen als HTML-Tabelle: Text hat dann kein „Name: …“ pro Zeile.\n    const klar = m.inhalt.replace(/<\\/(td|th|tr|p|div)>/gi, '\\n').replace(/<br\\s*\\/?>/gi, '\\n').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ');\n    const roh = feldAusFormular(m.text, 'E-Mail') || feldAusFormular(klar, 'E-Mail') || '';\n    const adressen = ((roh + ' ' + klar).match(/[\\w.+-]+@[\\w-]+(?:\\.[\\w-]+)*\\.[a-z]{2,}/gi) || []).map(a => a.toLowerCase()).filter(a => a !== KONFIG.absender);\n    const mail = /https?:\\/\\//i.test(roh) ? roh : (adressen[0] || roh);\n    const name = (m.betreff.match(/neues Profil von\\s+(.+)$/i) || [])[1] || feldAusFormular(m.text, 'Name') || feldAusFormular(klar, 'Name');\n    const alter = feldAusFormular(m.text, 'Alter der Kinder') || (klar.match(/Alter der Kinder\\s*:?\\s*\\n?\\s*([^\\n]+)/i) || [])[1] || '';\n    return { mail: /https?:\\/\\//i.test(mail) ? mail : mail.toLowerCase(), roh, name: (name || '').trim(), alter: alter.trim(), m };\n  });\n  state.profile = state.profile || {};\n  profile.forEach(p => { if (p.mail) state.profile[grundAdresse(p.mail)] = { name: p.name, seit: p.m.datum.toISOString() }; });\n  loeschen.forEach(m => { delete state.profile[grundAdresse(m.von)]; });\n\n  // 1) RECHT: Pflichtangaben, Werbung nur mit bestätigtem Opt-in\n  ausgehend.forEach(m => {\n    const fehlt = KONFIG.pflicht.filter(r => !r.muster.test(m.inhalt)).map(r => r.text);\n    const verstoss = KONFIG.verboten.filter(r => r.muster.test(m.inhalt)).map(r => r.text);\n    const empfaenger = m.an.filter(a => a !== KONFIG.absender);\n    const werbungOhneOptin = KONFIG.werbeblock.test(m.inhalt) && empfaenger.some(a => !state.optin[grundAdresse(a)]);\n    if (werbungOhneOptin && neu('werbung:' + m.id)) alarme.push(`⚖️ Werbung ohne bestätigtes Double-Opt-in an ${empfaenger.join(', ')} („${m.betreff}“)`);\n    if (fehlt.length && neu('pflicht:' + m.id)) warnungen.push(`📄 „${m.betreff}“ an ${empfaenger.join(', ')}: ${fehlt.join('; ')}`);\n    if (verstoss.length && neu('qualitaet:' + m.id)) warnungen.push(`✏️ „${m.betreff}“ an ${empfaenger.join(', ')}: ${verstoss.join('; ')}`);\n  });\n\n  // 2) STÖRUNG: unzustellbare Mails\n  bounces.forEach(m => {\n    const ziel = (m.text.match(/(?:Final-Recipient:\\s*rfc822;\\s*|nicht an\\s+|delivered to\\s+)([\\w.+-]+@[\\w.-]+\\.\\w+)/i) || [])[1] || 'unbekannt';\n    if (neu('bounce:' + m.id)) alarme.push(`📭 Mail an ${ziel} ist unzustellbar. Profil prüfen (Tippfehler?) – solange hängt das Match.`);\n  });\n\n  // 3) PROFILE: Adresse, Bestätigung, Testprofile, Altersangaben\n  profile.forEach(p => {\n    if (!gueltigeAdresse(p.mail) || /https?:\\/\\//i.test(p.roh)) {\n      if (neu('adresse:' + p.m.id)) alarme.push(`📧 Profil „${p.name || '?'}“ hat keine gültige E-Mail-Adresse: ${p.roh || '(leer)'}`);\n    }\n    const istTest = KONFIG.testMuster.some(r => r.test(p.mail) || r.test(p.name) || r.test(p.m.betreff));\n    if (istTest) testMap[grundAdresse(p.mail)] = `${p.name || '?'} <${p.mail}>`;\n    const bestaetigt = ausgehend.some(o => o.an.some(a => grundAdresse(a) === grundAdresse(p.mail)) && /Danke für dein Profil/i.test(o.betreff) && o.datum >= p.m.datum);\n    const alterMin = (jetzt - p.m.datum) / 60000;\n    if (!istTest && !bestaetigt && alterMin > KONFIG.bestaetigungMinuten && neu('bestaetigung:' + p.m.id)) {\n      alarme.push(`⏱️ ${p.name || p.mail} hat nach ${Math.round(alterMin)} Min. noch keine Bestätigung „Danke für dein Profil“ bekommen.`);\n    }\n    if (/0–1 Jahr|0-1 Jahr/.test(p.alter) && neu('alter:' + p.m.id)) {\n      warnungen.push(`🧮 ${p.name || p.mail}: Altersangabe „0–1 Jahr“ (neues Formular). Ältere Profile haben „unter 1 Jahr“ – prüfen, ob das Matching beide als gleich erkennt.`);\n    }\n  });\n  // Testprofile aus dem Gedächtnis (auch ältere Läufe)\n  Object.entries(state.profile).forEach(([mail, info]) => {\n    if (KONFIG.testMuster.some(r => r.test(mail) || r.test(info.name || ''))) {\n      if (!testMap[mail]) testMap[mail] = `${info.name || '?'} <${mail}>`;\n    }\n  });\n  const testprofile = Object.values(testMap);\n  Object.entries(testMap).forEach(([k, t]) => { if (neu('test:' + k)) alarme.push(`🧪 Testprofil noch aktiv: ${t} – bitte in der Match-Datenbank löschen, damit es niemand Echtes als Match bekommt.`); });\n\n  // 4) ANTWORTEN: JA/SCHREIBEN/NEIN müssen bestätigt werden\n  antworten.forEach(a => {\n    const ok = ausgehend.some(o => o.an.some(x => grundAdresse(x) === grundAdresse(a.von)) && /Danke, wir haben deine Antwort|stellen euch|Vorstellung/i.test(o.betreff + o.text.slice(0, 300)) && o.datum >= a.datum);\n    const min = (jetzt - a.datum) / 60000;\n    if (!ok && min > KONFIG.bestaetigungMinuten && neu('antwort:' + a.id)) warnungen.push(`⏱️ Antwort „${a.betreff}“ von ${a.von} ist seit ${Math.round(min)} Min. unbestätigt.`);\n  });\n\n  // 5) DOUBLE-OPT-IN: Bestätigung muss einem Profil zugeordnet werden können\n  optins.forEach(o => {\n    if (!state.profile[grundAdresse(o.von)] && neu('optin:' + o.id)) warnungen.push(`📬 „NEUIGKEITEN JA“ von ${o.von} passt zu keinem bekannten Profil (anderer Absender als im Formular?).`);\n  });\n\n  // 6) STILLE: Profile kommen rein, aber nichts geht raus = Workflow steht\n  const letzteAusgehend = ausgehend.reduce((t, m) => Math.max(t, m.datum.getTime()), 0);\n  const letztesProfil = profile.reduce((t, p) => Math.max(t, p.m.datum.getTime()), 0);\n  if (letztesProfil && letztesProfil > letzteAusgehend && (jetzt - letztesProfil) / 3600000 > KONFIG.stilleStunden && neu('stille:' + new Date(letztesProfil).toISOString())) {\n    alarme.push(`🚨 Seit über ${KONFIG.stilleStunden} Std. kam ein Profil rein, aber der Eltern-Match-Workflow hat keine einzige Mail verschickt. Läuft n8n?`);\n  }\n\n  // Gedächtnis klein halten (älter als 60 Tage vergessen)\n  for (const [k, t] of Object.entries(state.gemeldet)) if (jetzt - new Date(t) > 60 * 864e5) delete state.gemeldet[k];\n\n  const statistik = { geprueft: mails.length, ausgehend: ausgehend.length, intern: intern.length, profile: profile.length, antworten: antworten.length, bounces: bounces.length, optins: optins.length, aktiveProfile: Object.keys(state.profile).length, bestaetigteOptins: Object.keys(state.optin).length };\n  state.letzterLauf = { zeit: jetzt.toISOString(), statistik, alarme: alarme.length, warnungen: warnungen.length };\n\n  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n  let telegramText = '';\n  if (alarme.length || warnungen.length) {\n    telegramText = `<b>Eltern-Match Wächter</b> – ${alarme.length} Störung(en), ${warnungen.length} Hinweis(e)\\n`;\n    if (alarme.length) telegramText += '\\n<b>Sofort ansehen:</b>\\n' + alarme.map(esc).join('\\n') + '\\n';\n    if (warnungen.length) telegramText += '\\n<b>Qualität/Recht:</b>\\n' + warnungen.slice(0, 15).map(esc).join('\\n') + (warnungen.length > 15 ? `\\n… und ${warnungen.length - 15} weitere` : '') + '\\n';\n    telegramText += `\\n<i>${statistik.geprueft} Mails geprüft (Paket à 100)</i>`;\n  }\n  return { alarme, warnungen, testprofile, statistik, telegramText, hatAlarm: alarme.length + warnungen.length > 0 };\n}\n\n// --- n8n ---\nif (typeof $input !== 'undefined') {\n  return [{ json: pruefe($input.all(), $getWorkflowStaticData('global'), new Date()) }];\n}\nmodule.exports = { pruefe, grundAdresse };\n"
+      },
+      "id": "45397f4f-45ad-5553-be24-08fa76fd9a67",
+      "name": "Regelprüfung (Recht, Qualität, Störungen)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.hatAlarm }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "2c0c318a-a09d-5caf-9ce9-48600c05046b",
+      "name": "Störung oder Hinweis?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "5024797685",
+        "text": "={{ $json.telegramText }}",
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "appendAttribution": false
+        }
+      },
+      "id": "96089c4b-b327-51f3-bcf8-825a5272f622",
+      "name": "Telegram an Emma",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        880,
+        -100
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "BB1496igFd40NIrr",
+          "name": "Telegram Metropolis"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE TABLE IF NOT EXISTS eltern_match_waechter (zeit TEXT, alarme INTEGER, warnungen INTEGER, testprofile INTEGER, statistik TEXT, details TEXT);",
+        "options": {}
+      },
+      "id": "f1be610e-f222-59db-84b6-5e9c52374d84",
+      "name": "Metropolis-Tabelle anlegen",
+      "type": "n8n-nodes-base.sqlite",
+      "typeVersion": 1,
+      "position": [
+        880,
+        100
+      ],
+      "credentials": {
+        "sqlite": {
+          "id": "local_sqlite_metropolis",
+          "name": "Metropolis SQLite"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=INSERT INTO eltern_match_waechter (zeit, alarme, warnungen, testprofile, statistik, details) VALUES ('{{ $now.toISO() }}', {{ $('Regelprüfung (Recht, Qualität, Störungen)').item.json.alarme.length }}, {{ $('Regelprüfung (Recht, Qualität, Störungen)').item.json.warnungen.length }}, {{ $('Regelprüfung (Recht, Qualität, Störungen)').item.json.testprofile.length }}, '{{ JSON.stringify($('Regelprüfung (Recht, Qualität, Störungen)').item.json.statistik).replace(/'/g, \"''\") }}', '{{ JSON.stringify({alarme: $('Regelprüfung (Recht, Qualität, Störungen)').item.json.alarme, warnungen: $('Regelprüfung (Recht, Qualität, Störungen)').item.json.warnungen}).replace(/'/g, \"''\") }}');",
+        "options": {}
+      },
+      "id": "5b5d4060-d0ff-5520-847f-1d405172f216",
+      "name": "Lauf für Emma & Jarvis speichern",
+      "type": "n8n-nodes-base.sqlite",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        100
+      ],
+      "credentials": {
+        "sqlite": {
+          "id": "local_sqlite_metropolis",
+          "name": "Metropolis SQLite"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "eltern-match-status",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "60a2e558-4a86-53fe-97a8-9ab44f67051e",
+      "name": "Status-Abfrage (Emma & Jarvis)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        400
+      ],
+      "webhookId": "8cdbe4bd-e697-5e48-b65a-fcef1e7059a2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const s = $getWorkflowStaticData('global');\nconst test = Object.entries(s.profile || {}).filter(([m, i]) => /test|rueb\\.eu|irniarueb|irinarueb|ruebeu@|\\+mama@/i.test(m + ' ' + (i.name || ''))).map(([m, i]) => `${i.name || '?'} <${m}>`);\nreturn [{ json: { dienst: 'Eltern-Match Wächter', letzterLauf: s.letzterLauf || null, aktiveProfile: Object.keys(s.profile || {}).length, bestaetigteOptins: Object.keys(s.optin || {}).length, testprofileNochAktiv: test, ok: !!s.letzterLauf && s.letzterLauf.alarme === 0 } }];"
+      },
+      "id": "52470de2-9528-52ad-9e65-8f0b0a2d5569",
+      "name": "Status lesen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "2b0d138a-05ef-5958-b505-c579b80c3c4a",
+      "name": "Status zurückgeben",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        400
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "189f1f4c-16ca-5f91-b59b-f86b2493aa66",
+      "name": "Fehler in einem Workflow",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "5024797685",
+        "text": "=🚨 <b>Störung in n8n</b>\nWorkflow: <b>{{ $json.workflow.name }}</b>\nSchritt: {{ $json.execution.lastNodeExecuted || 'unbekannt' }}\nFehler: {{ ($json.execution.error && $json.execution.error.message || 'unbekannt').replace(/</g,'&lt;').slice(0, 500) }}\n{{ $json.execution.url ? 'Ansehen: ' + $json.execution.url : '' }}",
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "appendAttribution": false
+        }
+      },
+      "id": "e30644c0-ea40-58fc-ae66-ac91787c39a9",
+      "name": "Telegram: Workflow-Störung",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        700
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "BB1496igFd40NIrr",
+          "name": "Telegram Metropolis"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "497684ed-6173-5e2b-96be-55ae73fe755a",
+      "name": "Täglich 8 Uhr",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        1000
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": 100,
+        "simple": false,
+        "filters": {
+          "q": "in:sent newer_than:1d subject:\"Eltern-Match\"",
+          "includeSpamTrash": false
+        },
+        "options": {}
+      },
+      "id": "a97f4cda-f949-5ebc-8c56-63cf34b1e043",
+      "name": "Gmail: gesendete Eltern-Match-Mails (24 h)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        220,
+        1000
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "BITTE_AUSWAEHLEN",
+          "name": "Gmail info@dalinowellness.de"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const mails = $input.all().map(i => i.json).filter(j => j && j.id);\nif (!mails.length) return [];\n// Je Mailtyp (Betreff ohne Match-ID) eine Mail, höchstens 6\nconst proTyp = {};\nfor (const m of mails) { const typ = (m.subject || '').replace(/\\(EM[-\\w]*\\)/g, '').trim(); if (!proTyp[typ]) proTyp[typ] = m; }\nconst auswahl = Object.values(proTyp).slice(0, 6);\nconst text = auswahl.map((m, i) => `### Mail ${i + 1}: ${m.subject}\\n${(m.text || '').slice(0, 2500)}`).join('\\n\\n');\nreturn [{ json: { anzahl: mails.length, typen: auswahl.length, text } }];"
+      },
+      "id": "7ea42eea-6538-59d3-8af6-f155d5911497",
+      "name": "Stichprobe für Emma",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        1000
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "id": "6445b369-f008-594d-bce7-105b569e975c",
+      "name": "Gemini-Modell",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        660,
+        1200
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "U6jVg3cxRNRwbqPQ",
+          "name": "Google Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Du bist Emma und prüfst die automatischen E-Mails des Eltern-Match von Dalino Kids (Dalino Family Wellness, Pforzheim). Hier sind {{ $json.typen }} Beispiel-Mails aus den letzten 24 Stunden ({{ $json.anzahl }} insgesamt):\n\n{{ $json.text }}\n\nPrüfe streng:\n1. Recht: Impressum- und Datenschutz-Link vorhanden, Widerruf per „LÖSCHEN“ erklärt, keine Kontaktdaten anderer Eltern ohne beidseitige Zustimmung, keine Heilversprechen, Werbung nur mit Hinweis auf Abmeldung („KEINE WERBUNG“).\n2. Qualität: alle Mails gleicher Stil (Du-Form, „Dein Dalino-Kids-Team“, Adresse Kaulbachstr. 51–53), keine Platzhalter wie doppelte geschweifte Klammern oder undefined, keine Anrede ohne Namen, keine Rechtschreibfehler, Inhalt passt zum Betreff.\n3. Logik: Angaben zum Match widersprechen sich nicht (z. B. Kinderalter, Wohnort).\n\nAntworte auf Deutsch. Erste Zeile genau „OK“ oder „PROBLEM“. Danach höchstens 8 kurze Stichpunkte, was konkret falsch ist und wie man es behebt."
+      },
+      "id": "6c505d78-9532-5eca-a9e3-5c092ae901b5",
+      "name": "Emma Qualitätsprüfung",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        660,
+        1000
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c2",
+              "leftValue": "={{ ($json.text || '').trim() }}",
+              "rightValue": "PROBLEM",
+              "operator": {
+                "type": "string",
+                "operation": "startsWith"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "46a54580-8684-5ea6-b024-034a57b0a601",
+      "name": "Problem gefunden?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        880,
+        1000
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "5024797685",
+        "text": "=📝 <b>Emma – Qualitätsprüfung Eltern-Match-Mails</b>\n{{ ($json.text || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').slice(0, 3500) }}",
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "appendAttribution": false
+        }
+      },
+      "id": "83fc3650-681b-5a96-bc89-abc46d758a74",
+      "name": "Telegram: Qualitätsbericht",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1100,
+        1000
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "BB1496igFd40NIrr",
+          "name": "Telegram Metropolis"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Alle 30 Minuten": {
+      "main": [
+        [
+          {
+            "node": "Gmail: letzte 100 Eltern-Match-Mails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail: letzte 100 Eltern-Match-Mails": {
+      "main": [
+        [
+          {
+            "node": "Regelprüfung (Recht, Qualität, Störungen)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Regelprüfung (Recht, Qualität, Störungen)": {
+      "main": [
+        [
+          {
+            "node": "Störung oder Hinweis?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Metropolis-Tabelle anlegen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Störung oder Hinweis?": {
+      "main": [
+        [
+          {
+            "node": "Telegram an Emma",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Metropolis-Tabelle anlegen": {
+      "main": [
+        [
+          {
+            "node": "Lauf für Emma & Jarvis speichern",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Status-Abfrage (Emma & Jarvis)": {
+      "main": [
+        [
+          {
+            "node": "Status lesen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Status lesen": {
+      "main": [
+        [
+          {
+            "node": "Status zurückgeben",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fehler in einem Workflow": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Workflow-Störung",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Täglich 8 Uhr": {
+      "main": [
+        [
+          {
+            "node": "Gmail: gesendete Eltern-Match-Mails (24 h)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail: gesendete Eltern-Match-Mails (24 h)": {
+      "main": [
+        [
+          {
+            "node": "Stichprobe für Emma",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stichprobe für Emma": {
+      "main": [
+        [
+          {
+            "node": "Emma Qualitätsprüfung",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Emma Qualitätsprüfung": {
+      "main": [
+        [
+          {
+            "node": "Problem gefunden?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Problem gefunden?": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Qualitätsbericht",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini-Modell": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Emma Qualitätsprüfung",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Berlin",
+    "saveManualExecutions": true
+  },
+  "tags": []
+}
